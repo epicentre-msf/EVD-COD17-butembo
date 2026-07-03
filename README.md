@@ -1,9 +1,9 @@
 
 <div align = "center">
 
-# epitemplate-repo
+# EVD-COD17-butembo
 
-Template project structure for collaborative work [:rocket:](https://github.com/orgs/epicentre-msf/teams/epi-ds)
+Project for epidemiological analysis of the Ebola 2026 outbreak in Bulembo, North Kivu, DRC.
 
 </div>
 
