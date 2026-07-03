@@ -1,0 +1,51 @@
+# History files
+.Rhistory
+.Rapp.history
+
+# configuration repo
+*.DS_Store
+.vscode
+
+# Session Data files
+.RData
+.RDataTmp
+
+# User-specific files
+.Ruserdata
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# usual output files
+*.docx
+*.pdf
+*.html
+*.xlsx
+*.csv
+
+#usual local repositories (ignored folders)
+temp/
+data/
+local/
+
+# Renv
+renv/
+renv.lock
+
+# environment variables, profiles
+.Renviron
+.Rprofile
+.r-agent/

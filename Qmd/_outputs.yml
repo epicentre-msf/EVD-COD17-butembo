@@ -1,0 +1,24 @@
+# specify where to save files of specific file extensions
+# allowed file extensions are pdf, html, pptx, docx.
+extensions:
+  pdf: "local/pdf"
+  html: "local/html"
+
+
+# You can have multiple key/values named (regex/folder) where "regex" is
+# the regular expression matching the files you want and "folder" is 
+# where you want to save your files.
+
+files:
+  # template files
+  - regex: "^template"
+    folder: "local/template"
+
+  # reports
+  - regex: "report"
+    folder: "local/reports"
+
+# order: files > extensions. First find element matching files and 
+# then find element matching extensions. If you used "output_folder"
+# as argument, all the output files are copyied to the "output_folder"
+# before using directives in the _outputs.yml
