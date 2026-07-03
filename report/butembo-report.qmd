@@ -1,0 +1,141 @@
+---
+title: "Rapport de situation: ville de Butembo"
+subtitle: "Rapport préparé par Médecins Sans Frontières avec l'appui du Ministère de la Santé, RDC"
+author: "Auteurs: Hugo Soubrier, Emmanuel Lurhangire & Flavio Finger"
+date-format: "D MMMM YYYY"
+params:
+  date_updated: ""
+format:
+  docx:
+    reference-doc: www/MSF-rapport-epidemiologique_template.docx
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(knitr)
+
+# Center every figure/table image in the report.
+opts_chunk$set(fig.align = "center")
+
+# Figures live in output/butembo/ at the project root (../ from this .qmd).
+fig <- function(name) {
+  here::here("output", "butembo", name)
+}
+
+# Data cut-off: passed in by _render.R (modification time of the positives
+# summary). Falls back to today if the report is knitted on its own.
+date_cut <- if (nzchar(params$date_updated)) {
+  format(as.Date(params$date_updated), "%d %B %Y")
+} else {
+  format(Sys.Date(), "%d %B %Y")
+}
+```
+
+> **Données arrêtées au `r date_cut`.**
+## Résumé 
+
+Inclure le résumé de la situation
+
+## Situation générale
+
+Synthèse des cas positifs confirmés dans les zones de santé de Butembo et Katwa.
+
+```{r}
+#| fig-cap: "Résumé des cas positifs par zone de santé et statut du patient."
+#| out-width: "3in"
+include_graphics(fig("butembo_pos_summary.png"))
+```
+
+```{r}
+#| fig-cap: "Cas confirmés et notification par formation sanitaire."
+#| out-width: "100%"
+include_graphics(fig("butembo_map_confirmed_reporting.png"))
+```
+
+```{r}
+#| fig-cap: "Létalité (CFR) parmi les cas confirmés."
+#| out-width: "4.5in"
+include_graphics(fig("butembo_cfr.png"))
+```
+
+### Cas actifs
+
+```{r}
+#| fig-cap: "Cas actifs par zone de santé et lieu d'isolement."
+#| out-width: "4.5in"
+include_graphics(fig("butembo_active_isolation.png"))
+```
+
+## Évolution temporelle
+
+```{r}
+#| fig-cap: "Courbe épidémique hebdomadaire — ensemble des zones."
+#| out-width: "100%"
+include_graphics(fig("butembo_global_epicurve_week.png"))
+```
+
+```{r}
+#| fig-cap: "Courbe épidémique hebdomadaire par zone de santé."
+#| out-width: "100%"
+include_graphics(fig("butembo_HZ_epicurve_week.png"))
+```
+
+## Délais épidémiologiques
+
+```{r}
+#| fig-cap: "Délais entre le début des symptômes et l'issue (décès / guérison)."
+#| out-width: "100%"
+include_graphics(fig("butembo_delays_boxplot.png"))
+```
+
+```{r}
+#| fig-cap: "Délais médians (jours) et intervalle interquartile, dont le délai de notification selon l'issue."
+#| out-width: "5.5in"
+include_graphics(fig("butembo_delays_median.png"))
+```
+
+## Caractéristiques des cas
+
+```{r}
+#| fig-cap: "Pyramide des âges des cas confirmés, par sexe et origine de l'infection."
+#| out-width: "90%"
+include_graphics(fig("butembo_age_pyramid.png"))
+```
+
+```{r}
+#| fig-cap: "Décès à l'arrivée à l'ETC et décès communautaires parmi les cas confirmés."
+#| out-width: "4.5in"
+include_graphics(fig("butembo_mortality_desc.png"))
+```
+
+## Alertes
+
+```{r}
+#| fig-cap: "Synthèse du suivi des alertes."
+#| out-width: "6in"
+include_graphics(fig("butembo_alerts_by_hz_time.png"))
+```
+
+```{r}
+#| fig-cap: "Distribution spatiale des alertes."
+#| out-width: "100%"
+include_graphics(fig("butembo_map_alerts.png"))
+```
+
+## Suivi des contacts
+
+```{r}
+#| fig-cap: "Synthèse du suivi temporelle des contacts."
+#| out-width: "5.5in"
+include_graphics(fig("butembo_contacts_by_hz_time.png"))
+```
+
+```{r}
+#| fig-cap: "Distribution spatiale du suivi des contacts."
+#| out-width: "100%"
+include_graphics(fig("butembo_map_contact.png"))
+```
