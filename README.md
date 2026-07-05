@@ -1,8 +1,9 @@
 <div align = "center">
 
 # EVD-COD17-butembo
+Epidemiological situation report for the Ebola Virus Disease response in **Butembo & Katwa Health zones (city of Butembo)** (RDC). All sitreps can be found on [this sharepoint]().
 
-Epidemiological situation report for the Ebola Virus Disease response in **Butembo & Katwa Health zones (city of Butembo)** (RDC)
+Contact: hugo.soubrier@epicentre.msf.org / msff-butembo-ebola-epidemio@paris.msf.org
 
 </div>
 
@@ -12,8 +13,7 @@ This project produces the routine epidemiological situation report
 (*"Rapport de situation: ville de Butembo"*) prepared by Médecins Sans
 Frontières with the support of the Ministère de la Santé, RDC.
 
-It reads the cleaned EVD linelist for Butembo, alert, contact and transmission data from
-the shared SharePoint folder, runs a set of analyses, and assembles the
+It reads the latest exports from the EVD linelist for Butembo, the alerts and contacts data, and the transmission data from the SharePoint folder, runs a set of analyses, and assembles the
 results into a Word report. The analyses cover:
 
 - **Overview** — confirmed cases by health zone and reporting facilities
@@ -24,6 +24,18 @@ results into a Word report. The analyses cover:
 - **Transmission** — transmission chains analysis
 - **CFR** — case fatality calculation and adjustment. 
 - **Health facilities** — patient care pathways before isolation
+
+## Data sources
+All data are stored on the OCP sharepoint for the Butembo project and are only available to authorised access. 
+
+### EVD linelist data
+The epicentre Linelist used across the outbreak is manually filled every day using the data triangulated from the laboratory database, the local linelist, the case investigations, and the case narratives. 
+
+### Alerts and Contacts data
+Alerts and contact data are retrived from the daily sitreps produced by the Health zones of Katwa and Butembo. These sitreps provide aggregated counts of daily alerts and contacts metrics by health areas. 
+
+### Transmission data
+Transmission data are reconstructed using the cases investigations and narratives.
 
 ## Project layout
 
@@ -54,5 +66,4 @@ Run the render pipeline, which regenerates all figures and renders the `.docx`:
 source(here::here("report", "_render.R"))
 ```
 
-This runs the analysis scripts in order, stamps the report with the data
-cut-off date, and writes `report/butembo-report.docx`.
+This runs the analysis scripts in order, stamps the report with the data cut-off date, and writes `report/butembo-report.docx`.
