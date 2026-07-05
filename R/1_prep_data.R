@@ -1,7 +1,7 @@
 #* CLEAN BUTEMBO DATA ------------------------------------------------------------------------------------
 
-# This script takes the sitrep data, the narrative linelist and the other data from the butelmbo project
-# cleans and standardise them to be saved timestamped in sharepoint under Donnees/propre
+# Clean the linelist, transmission, alert and contact data
+# Timestamped exports saved under Donnees/propre
 
 # load all paths and libraries
 source("R/0_global.R")
@@ -45,7 +45,7 @@ ll_narr_clean <- ll_narr |>
       infection_butembo,
       levels = c("Incertaine", "Importée", "Locale"),
     ),
-    # F = Femme, H = Homme, M = Male — uniformise les codes de sexe
+    # uniformise les codes de sexe
     sex = case_match(
       sex,
       c("H", "M") ~ "Homme",
@@ -59,8 +59,7 @@ ll_narr_clean <- ll_narr |>
       labels = age_labs
     ),
     across(where(is.character), ~ na_if(.x, "")),
-    # isolation_site_id holds "site | aire de santé (adm3) | zone de santé (adm2)"
-    # split it into its 3 parts, then overwrite the id with the site only
+    # split "site | aire de santé | zone de santé" into 3 columns
     adm3_isolation = str_squish(str_split_i(isolation_site_id, fixed("|"), 2)),
     adm2_isolation = str_squish(str_split_i(isolation_site_id, fixed("|"), -1)),
     isolation_site_id = str_squish(str_split_i(
@@ -71,8 +70,7 @@ ll_narr_clean <- ll_narr |>
   ) |>
   rename(pid = patient_site_id)
 
-# Source-file modification time = when the positives summary was last refreshed.
-# Saved alongside the data so every table/map can stamp its validity date.
+# source-file modification date, saved alongside the data
 ll_narr_update <- as.Date(fs::file_info(latest_narr_ll)$modification_time)
 
 time_write <- time_stamp()

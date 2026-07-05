@@ -7,7 +7,7 @@ date_report <- butembo_pos$date_updated # source-file modification date (Date)
 
 #* TIME (Onset) --------------------------------------------------------
 
-# Cases dropped from the epicurves because they have no onset date.
+# cases with no onset date, excluded from the epicurves
 n_missing_onset <- sum(is.na(pos_data_clean$date_symptom_onset))
 pct_missing_onset <- round(100 * n_missing_onset / nrow(pos_data_clean))
 onset_caption <- glue::glue(
@@ -56,8 +56,6 @@ nk_conf_epicurve_week <- inci_week |>
   ) +
   scale_fill_manual("Infection", values = inf_cols, drop = FALSE) +
   labs(
-    title = "Cas confirmés de MVE par semaine de début des symptômes",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Semaine de début des symptômes",
     y = "Nombre de cas",
     caption = onset_caption
@@ -87,7 +85,7 @@ nk_conf_epicurve_week
 ggsave(
   fs::path(out_dir, "butembo_global_epicurve_week.png"),
   nk_conf_epicurve_week,
-  height = 6,
+  height = 7,
   width = 10,
   dpi = 300,
   bg = "white"
@@ -124,8 +122,6 @@ nk_conf_epicurve <- inci_adm2_week |>
   ) +
   scale_fill_manual("Zone de santé", values = adm2_cols, drop = FALSE) +
   labs(
-    title = "Cas confirmés de MVE par semaine de début des symptômes",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Semaine de début des symptômes",
     y = "Nombre de cas",
     caption = onset_caption
@@ -155,7 +151,7 @@ nk_conf_epicurve
 ggsave(
   fs::path(out_dir, "butembo_HZ_epicurve_week.png"),
   nk_conf_epicurve,
-  height = 6,
+  height = 7,
   width = 10,
   dpi = 300,
   bg = "white"

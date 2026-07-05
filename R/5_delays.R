@@ -6,11 +6,7 @@ pos_data_clean <- butembo_pos$data
 date_report <- butembo_pos$date_updated # source-file modification date (Date)
 
 #* DELAYS -------------------------------------------------------------
-# Three delays, each on its own denominator:
-#   - onset -> notification : all cases with both dates
-#   - onset -> death        : cases with type_of_exit == "Décédé"
-#   - onset -> cure         : cases with type_of_exit == "Guéri"
-# The event dates come from the cleaned linelist (already parsed as Date).
+# onset -> notification (all cases), onset -> death (décès), onset -> cure (guéris)
 delays <- pos_data_clean |>
   select(
     date_symptom_onset,
@@ -32,7 +28,22 @@ delays <- pos_data_clean |>
     )
   )
 
-# Readable labels + a fixed display order for the three delays
+# case counts for the completeness captions
+n_all_total <- nrow(delays)
+n_death_total <- sum(delays$type_of_exit == "Décédé", na.rm = TRUE)
+n_cure_total <- sum(delays$type_of_exit == "Guéri", na.rm = TRUE)
+
+n_notif_valid <- sum(!is.na(delays$delay_ons_not))
+n_death_valid <- sum(!is.na(delays$delay_ons_death))
+n_cure_valid <- sum(!is.na(delays$delay_ons_cure))
+n_notif_death_valid <- sum(
+  delays$type_of_exit == "Décédé" & !is.na(delays$delay_ons_not)
+)
+n_notif_cure_valid <- sum(
+  delays$type_of_exit == "Guéri" & !is.na(delays$delay_ons_not)
+)
+
+# labels and display order
 delay_labels <- c(
   "delay_ons_not" = "Début des symptômes → notification",
   "delay_ons_death" = "Début des symptômes → décès",
@@ -44,8 +55,7 @@ delay_cols <- c(
   "Début des symptômes → guérison" = "#66a61e" # green
 )
 
-# Onset -> notification is shown separately (stratified by outcome, below), so
-# the distribution / boxplot / table cover only the two onset -> exit delays.
+# notification delay handled separately below; keep only the two exit delays
 exit_labels <- delay_labels[c("delay_ons_death", "delay_ons_cure")]
 
 delays_long <- delays |>
@@ -63,27 +73,82 @@ delays_long <- delays |>
     )
   )
 
-#* Distribution of delays ---------------------------------------------
-butembo_delays_hist <- delays_long |>
-  ggplot(aes(x = delay, fill = delay_name)) +
-  # boundary = -0.5 aligns each 1-day bin on its integer value (centred on ticks)
-  geom_histogram(binwidth = 1, boundary = -0.5, colour = "white", alpha = .8) +
-  facet_wrap(~delay_name, ncol = 1, scales = "free_y") +
+#* MLE fit of the onset -> death delay --------------------------------
+# gamma fit (fitdistrplus, MLE)
+death_delays <- delays |>
+  filter(type_of_exit == "Décédé", !is.na(delay_ons_death)) |>
+  pull(delay_ons_death)
+
+# fitdistrplus needs positive values; nudge same-day deaths to 0.5
+death_delays_fit <- if_else(death_delays <= 0, 0.5, death_delays)
+
+fit_gamma <- fitdistrplus::fitdist(death_delays_fit, "gamma", method = "mle")
+
+# fitted parameters and quantiles
+gamma_shape <- unname(fit_gamma$estimate["shape"])
+gamma_rate <- unname(fit_gamma$estimate["rate"])
+gamma_mean <- gamma_shape / gamma_rate
+gamma_q <- qgamma(c(0.25, 0.5, 0.75), shape = gamma_shape, rate = gamma_rate)
+
+# density curve scaled to counts for the histogram overlay
+x_grid <- seq(0, max(death_delays_fit), length.out = 300)
+gamma_curve <- tibble::tibble(
+  x = x_grid,
+  count = dgamma(x_grid, shape = gamma_shape, rate = gamma_rate) *
+    length(death_delays_fit)
+)
+
+fit_subtitle <- sprintf(
+  "Ajustement gamma (MLE) — forme = %.2f, taux = %.2f · moyenne = %.1f j, médiane = %.1f j (n = %d)",
+  gamma_shape,
+  gamma_rate,
+  gamma_mean,
+  gamma_q[2],
+  length(death_delays_fit)
+)
+
+butembo_delay_death_fit <- tibble::tibble(delay = death_delays_fit) |>
+  ggplot(aes(x = delay)) +
+  geom_histogram(
+    binwidth = 1,
+    boundary = -0.5,
+    colour = "white",
+    fill = delay_cols[["Début des symptômes → décès"]],
+    alpha = 0.8
+  ) +
+  geom_line(
+    data = gamma_curve,
+    aes(x = x, y = count),
+    colour = "#7a1f1f",
+    linewidth = 0.9
+  ) +
+  geom_vline(
+    xintercept = gamma_q[2],
+    colour = "#7a1f1f",
+    linetype = "22",
+    linewidth = 0.5
+  ) +
   scale_x_continuous(
-    breaks = scales::breaks_width(2),
+    breaks = scales::breaks_width(5),
     expand = expansion(mult = c(0.01, 0.02))
   ) +
   scale_y_continuous(
     breaks = scales::breaks_width(2),
     expand = expansion(mult = c(0, 0.05))
   ) +
-  scale_fill_manual(values = delay_cols, guide = "none") +
   labs(
-    title = "Distribution des délais — cas confirmés de MVE",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Délai (jours)",
     y = "Nombre de cas",
-    caption = paste0("Données au ", fr_date(date_report))
+    caption = paste0(
+      fit_subtitle,
+      "\nDécès : ",
+      n_death_valid,
+      " / ",
+      n_death_total,
+      " cas avec information disponible\n",
+      "Données au ",
+      fr_date(date_report)
+    )
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -95,65 +160,105 @@ butembo_delays_hist <- delays_long |>
       linewidth = 0.2,
       linetype = "62"
     ),
-    strip.text = element_text(face = "bold", hjust = 0, size = 11),
     plot.title = element_text(face = "bold", size = 13),
     plot.title.position = "plot",
+    plot.subtitle = element_text(size = 9),
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
     axis.ticks.x = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )
 
-butembo_delays_hist
+butembo_delay_death_fit
 
 ggsave(
-  fs::path(out_dir, "butembo_delays_distribution.png"),
-  butembo_delays_hist,
-  height = 8,
-  width = 9,
+  fs::path(out_dir, "butembo_delay_death_gamma_fit.png"),
+  butembo_delay_death_fit,
+  height = 6,
+  width = 8,
   dpi = 300,
   bg = "white"
+)
+
+#* Delay-fit database -------------------------------------------------
+# one row per fitted delay; fit list-column keeps the full fitdistrplus object
+delay_fits <- tibble::tibble(
+  delay = "onset_to_death",
+  delay_label = "Début des symptômes → décès",
+  distribution = "gamma",
+  method = "mle",
+  n = length(death_delays_fit),
+  shape = gamma_shape,
+  rate = gamma_rate,
+  mean = gamma_mean,
+  median = gamma_q[2],
+  q25 = gamma_q[1],
+  q75 = gamma_q[3],
+  aic = fit_gamma$aic,
+  loglik = fit_gamma$loglik,
+  fit = list(fit_gamma),
+  date_updated = date_report
+)
+
+file_base <- glue::glue("BUT-EVD_BUTEMBO_delay-fits__{time_stamp()}")
+
+saveRDS(
+  delay_fits,
+  fs::path(
+    butembo_project_clean_data_path,
+    paste0(file_base, ".rds")
+  )
 )
 
 #* Boxplot + jitter of delays -----------------------------------------
 butembo_delays_box <- delays_long |>
   ggplot(aes(
-    x = delay,
-    y = delay_name,
+    x = delay_name,
+    y = delay,
     colour = delay_name,
     fill = delay_name
   )) +
   geom_boxplot(
-    width = 0.5,
-    alpha = 0.25,
-    outlier.shape = NA, # points shown by the jitter layer instead
+    width = 0.3,
+    alpha = 0.1,
+    outlier.shape = NA,
     linewidth = 0.4
   ) +
   geom_jitter(
-    height = 0.15,
-    width = 0, # keep the exact delay value on x
+    width = 0.15,
+    height = 0,
     size = 1.8,
-    alpha = 0.6
+    alpha = 0.4
   ) +
-  scale_x_continuous(
-    breaks = scales::breaks_width(2),
+  scale_x_discrete(limits = rev) +
+  scale_y_continuous(
+    breaks = scales::breaks_width(5),
     expand = expansion(mult = c(0.01, 0.03))
   ) +
-  scale_y_discrete(limits = rev) + # first delay on top
   scale_colour_manual(values = delay_cols, guide = "none") +
   scale_fill_manual(values = delay_cols, guide = "none") +
   labs(
-    title = "Délais — cas confirmés de MVE",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
-    x = "Délai (jours)",
-    y = NULL,
-    caption = paste0("Données au ", fr_date(date_report))
+    x = NULL,
+    y = "Délai (jours)",
+    caption = paste0(
+      "Décès : ",
+      n_death_valid,
+      " / ",
+      n_death_total,
+      " · Guérison : ",
+      n_cure_valid,
+      " / ",
+      n_cure_total,
+      " cas avec information disponible\n",
+      "Données au ",
+      fr_date(date_report)
+    )
   ) +
   theme_minimal(base_size = 12) +
   theme(
-    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
     panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_line(
+    panel.grid.major.y = element_line(
       colour = "grey80",
       linewidth = 0.2,
       linetype = "62"
@@ -162,27 +267,17 @@ butembo_delays_box <- delays_long |>
     plot.title.position = "plot",
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
-    axis.ticks.x = element_line(colour = "grey70"),
+    axis.ticks.y = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )
 
 butembo_delays_box
 
-ggsave(
-  fs::path(out_dir, "butembo_delays_boxplot.png"),
-  butembo_delays_box,
-  height = 5,
-  width = 12,
-  dpi = 300,
-  bg = "white"
-)
-
 #* Onset -> notification delay, stratified by outcome -----------------
-# Does the time from symptom onset to notification differ between cases that
-# died and those that recovered? Restricted to resolved cases.
+# restricted to resolved cases (décédés / guéris)
 outcome_cols <- c(
-  "Décédé" = "#bc5c5c", # red
-  "Guéri" = "#66a61e" # green
+  "Décédé" = "#6a4c93", # purple
+  "Guéri" = "#e69f00" # orange
 )
 
 notif_by_outcome <- delays |>
@@ -191,42 +286,52 @@ notif_by_outcome <- delays |>
 
 butembo_delay_notif_outcome <- notif_by_outcome |>
   ggplot(aes(
-    x = delay_ons_not,
-    y = outcome,
+    x = outcome,
+    y = delay_ons_not,
     colour = outcome,
     fill = outcome
   )) +
   geom_boxplot(
-    width = 0.5,
-    alpha = 0.25,
+    width = 0.3,
+    alpha = 0.12,
     outlier.shape = NA,
     linewidth = 0.4
   ) +
   geom_jitter(
-    height = 0.15,
-    width = 0,
+    width = 0.15,
+    height = 0,
     size = 1.8,
     alpha = 0.6
   ) +
-  scale_x_continuous(
+  scale_x_discrete(limits = rev) +
+  scale_y_continuous(
     breaks = scales::breaks_width(2),
     expand = expansion(mult = c(0.01, 0.03))
   ) +
-  scale_y_discrete(limits = rev) +
   scale_colour_manual(values = outcome_cols, guide = "none") +
   scale_fill_manual(values = outcome_cols, guide = "none") +
   labs(
-    title = "Délai début des symptômes → notification, selon l'issue",
-    subtitle = "Cas confirmés de MVE — Butembo et Katwa, Nord-Kivu, RDC, 2026",
-    x = "Délai début des symptômes → notification (jours)",
-    y = NULL,
-    caption = paste0("Données au ", fr_date(date_report))
+    x = NULL,
+    y = "Délai début des symptômes → notification (jours)",
+    caption = paste0(
+      "Décédés : ",
+      n_notif_death_valid,
+      " / ",
+      n_death_total,
+      " · Guéris : ",
+      n_notif_cure_valid,
+      " / ",
+      n_cure_total,
+      " cas avec information disponible\n",
+      "Données au ",
+      fr_date(date_report)
+    )
   ) +
   theme_minimal(base_size = 12) +
   theme(
-    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
     panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_line(
+    panel.grid.major.y = element_line(
       colour = "grey80",
       linewidth = 0.2,
       linetype = "62"
@@ -235,17 +340,27 @@ butembo_delay_notif_outcome <- notif_by_outcome |>
     plot.title.position = "plot",
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
-    axis.ticks.x = element_line(colour = "grey70"),
+    axis.ticks.y = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )
 
 butembo_delay_notif_outcome
 
+#* Combined boxplots (patchwork) --------------------------------------
+# exit delays + notification-by-outcome side by side
+butembo_delays_combined <- (butembo_delays_box / butembo_delay_notif_outcome) +
+  patchwork::plot_annotation(
+    tag_levels = "A",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+
+butembo_delays_combined
+
 ggsave(
-  fs::path(out_dir, "butembo_delay_notif_by_outcome.png"),
-  butembo_delay_notif_outcome,
-  height = 4.5,
-  width = 9,
+  fs::path(out_dir, "butembo_delays_combined.png"),
+  butembo_delays_combined,
+  height = 11,
+  width = 8,
   dpi = 300,
   bg = "white"
 )
@@ -297,12 +412,8 @@ delays_median_gt <- delays_median |>
     iqr = "IQR (jours)"
   ) |>
   gt::cols_align(align = "center", columns = c(n, median, iqr)) |>
-  gt::tab_caption(
-    gt::md(paste0(
-      "**Délais médians — données au ",
-      fr_date(date_report),
-      "**"
-    ))
+  gt::tab_source_note(
+    gt::md(paste0("Données au ", fr_date(date_report)))
   ) |>
   gt::tab_footnote(
     "IQR = intervalle interquartile (25e–75e percentile)."

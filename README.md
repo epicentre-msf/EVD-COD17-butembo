@@ -1,116 +1,58 @@
-
 <div align = "center">
 
-# epitemplate-repo
+# EVD-COD17-butembo
 
-Template project structure for collaborative work [:rocket:](https://github.com/orgs/epicentre-msf/teams/epi-ds)
+Epidemiological situation report for the Ebola Virus Disease response in **Butembo & Katwa Health zones (city of Butembo)** (RDC)
 
 </div>
 
+## About
 
+This project produces the routine epidemiological situation report
+(*"Rapport de situation: ville de Butembo"*) prepared by Médecins Sans
+Frontières with the support of the Ministère de la Santé, RDC.
+
+It reads the cleaned EVD linelist for Butembo, alert, contact and transmission data from
+the shared SharePoint folder, runs a set of analyses, and assembles the
+results into a Word report. The analyses cover:
+
+- **Overview** — confirmed cases by health zone and reporting facilities
+- **Time** — epidemic curves (by onset and by notification date)
+- **Person** — age/sex distribution of cases
+- **Delays** — key delays in the response
+- **Alerts** and **contact tracing** — follow-up overview and maps
+- **Transmission** — transmission chains analysis
+- **CFR** — case fatality calculation and adjustment. 
+- **Health facilities** — patient care pathways before isolation
+
+## Project layout
+
+- `R/` — numbered analysis scripts, run in order (`0_global.R` sets up paths
+  and shared config; `1_prep_data.R` cleans the data; `2_`–`10_` produce the
+  figures written to `output/`).
+- `report/` — the Quarto report (`butembo-report.qmd`), its template, and the
+  one-command render pipeline (`_render.R`).
+- `output/` — generated figures (gitignored).
+- `data`, `local`, `temp` — local data / output storage (gitignored).
 
 ## Getting started
 
-This template requires the path to your OneDrive Sharepoint folder. 
-Set it up in your `.Renviron` file located in your `HOME` or project directory. 
-
-Setting the environment variables in your `HOME` directory will make it
-available to all your R projects. On the other hand project level 
-`.Renviron` make the environment variables only available to your specific project. 
-
-- In the `.Renviron` file, add:
-
-    ```r
-    SHAREPOINT_PATH="ADD YOUR SHAREPOINT PATH HERE"
-    ```
-- Restart your R session so that the updated `.Renviron` is loaded
-- The [`set_paths()`](R/setpaths.R) function allows you to quickly access
- your sharepoint path as well as all of the synced sub-folders in the sharepoint folder. 
-*This function requires to have {janitor}, {stringr}, {cli} and {fs} packages installed.*
-
-## Ignored folders
-
-In every project, the following directories are gitignored by default,
-you can add them to the project depending on your needs:
-
-- `data` for local data storage.
-- `local` for local output (ex. pdfs, html, png, excels files).
-- `temp` for temporary/sensitive files.
-- `renv` files and folders if you configured [`renv`](https://cran.r-project.org/web/packages/renv/index.html) for your project.
-
-## Rmd template
-
-You can create rmarkdown template using the [`epitemplates`](https://github.com/epicentre-msf/epitemplates) R package.
-
-- Install the `epitemplates` R package
+The project reads its data from a OneDrive/SharePoint folder. Set the path in
+your `.Renviron` file (in your `HOME` or the project directory):
 
 ```r
-# install.packages("remotes")
-remotes::install_github("epicentre-msf/epitemplates")
+SHAREPOINT_PATH="ADD YOUR SHAREPOINT PATH HERE"
 ```
 
-- To create a new `Rmd` file in the project, run in the console
+Restart your R session so the updated `.Renviron` is loaded.
+
+## Producing the report
+
+Run the render pipeline, which regenerates all figures and renders the `.docx`:
 
 ```r
-epitemplates::epi_rmd(path = "Rmd/[newfile].Rmd")
+source(here::here("report", "_render.R"))
 ```
 
-where `[newfile]` is the new file to add. Start editing the `.Rmd` file.
-
-Alternatively if you are using RStudio you can create a new Rmd file
-by using the addins `Addins > Epitemplates > Rmd document`. 
-You will be prompted to pick a file path.
-
-## Quarto template
-
-You can create quarto template using the [`epitemplates`](https://github.com/epicentre-msf/epitemplates) R package.
-
-- Install the `epitemplates` quarto package
-
-```r
-# install.packages("remotes")
-remotes::install_github("epicentre-msf/epitemplates")
-```
-
-- To create a new `Rmd` file in the project, run in the R console
-
-```r
-epitemplates::epi_qmd(path = "Qmd/[newfile].qmd")
-```
-
-where `[newfile]` is the new file to add. Start editing the `.qmd` file.
-
-Alternatively if you are using RStudio you can create a new Rmd file
-by using the addins 
-`Addins > Epitemplates > Quarto document`. You will be prompted to pick a file path.
-
-## Rendering documents
-
-We usually render documents to a local folder called `local`. 
-`quarto`does not allow to render a file to an output directory other 
-than the one of the quarto document, [unless you have a project structure](https://github.com/quarto-dev/quarto-r/issues/81).
-`epitemplates` has a wrapper function for rendering documents to your 
-local folder.
-
-```r
-# render qmd to your local folder
-epitemplates::epi_render(
-    input = "Qmd/[yourfile].qmd",
-    output_format = "all",
-    output_folder = "local"
-)
-
-# render Rmd to your local folder
-epitemplates::epi_render(
-    input = "Rmd/[yourfile].Rmd",
-    output_format = "all",
-    output_folder = "local"
-)
-```
-
-Depending on the setup of your local folder you may want to render to a
-specific sub-folders of your `local` folder. For example, render all 
-`Rmd/Qmd` files to a report sub-folder, or one specific `Rmd/Qmd` file
-to a specific sub-folder. You can configure these options in the 
-`YAML` [`_outputs.yml`](Rmd/_outputs.yml) in each `Rmd/Qmd` folder. 
-There is a default one in the current project structure you can start with.
+This runs the analysis scripts in order, stamps the report with the data
+cut-off date, and writes `report/butembo-report.docx`.

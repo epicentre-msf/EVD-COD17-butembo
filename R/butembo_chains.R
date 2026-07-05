@@ -26,7 +26,6 @@ df <- trans_dat |>
     exp_window = as.numeric(end_exposure - start_exposure)
   )
 
-
 # Exploratory
 
 # max SI is 29 !!

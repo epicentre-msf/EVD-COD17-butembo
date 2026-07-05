@@ -7,6 +7,12 @@ date_report <- butembo_pos$date_updated # source-file modification date (Date)
 
 #* PERSON (Age & sex pyramid) ------------------------------------------
 
+# quick tabulation of cases by age group
+pos_data_clean |>
+  count(age_group, .drop = FALSE) |>
+  mutate(pct = round(100 * n / sum(n), 1)) |>
+  print()
+
 pyr_data <- pos_data_clean |>
   filter(!is.na(age), !is.na(sex)) |>
   count(infection_butembo, age_group, sex, .drop = FALSE) |>
@@ -54,8 +60,6 @@ nk_pyramid <- pyr_data |>
   scale_fill_manual(values = sex_cols) +
   scale_linetype_manual(NULL, values = c("Point médian" = "22")) +
   labs(
-    title = "Répartition des cas confirmés de MVE par âge, sexe et type d'infection",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Nombre de cas",
     y = "Groupe d'âge (années)",
     fill = NULL,
@@ -88,51 +92,8 @@ nk_pyramid
 ggsave(
   fs::path(out_dir, "butembo_age_pyramid.png"),
   nk_pyramid,
-  height = 5,
-  width = 8,
+  height = 6,
+  width = 9,
   dpi = 300,
   bg = "white"
 )
-
-#* MORTALITÉ (décès à l'arrivée & décès communautaire) -----------------
-# Petite synthèse : nombre (et %) de cas décédés à l'arrivée à l'ETC et
-# décès survenus dans la communauté. Le % est calculé parmi les cas dont
-# l'information est renseignée (hors valeurs manquantes).
-mort_desc <- tibble::tibble(
-  indicateur = c(
-    "Décès à l'arrivée à l'ETC",
-    "Décès communautaire"
-  ),
-  n_oui = c(
-    sum(pos_data_clean$dead_upon_arrival == "Oui", na.rm = TRUE),
-    sum(pos_data_clean$community_death == "Oui", na.rm = TRUE)
-  ),
-  n_connu = c(
-    sum(!is.na(pos_data_clean$dead_upon_arrival)),
-    sum(!is.na(pos_data_clean$community_death))
-  )
-) |>
-  mutate(pct = n_oui / n_connu)
-
-mort_desc_gt <- mort_desc |>
-  gt::gt() |>
-  gt::cols_label(
-    indicateur = "",
-    n_oui = "Cas",
-    n_connu = "Renseignés",
-    pct = "%"
-  ) |>
-  gt::fmt_percent(pct, decimals = 1) |>
-  gt::tab_caption(
-    gt::md(paste0(
-      "**Décès à l'arrivée et décès communautaires — cas confirmés — données au ",
-      fr_date(date_report),
-      "**"
-    ))
-  ) |>
-  gt::tab_footnote(
-    "% calculé parmi les cas avec information renseignée (hors valeurs manquantes)."
-  )
-
-mort_desc_gt |>
-  save_gt("butembo_mortality_desc.png")

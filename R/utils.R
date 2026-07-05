@@ -27,14 +27,23 @@ zone_last_dates <- function(
 # gtsave crops tight to the table, so width follows the table's own content;
 # zoom is the resolution multiplier (higher = crisper, larger file).
 # font_size sets a consistent (small) text size across all tables.
+#
+# gtsave bakes `zoom`x pixels into the PNG but tags it at 72 dpi, so Word /
+# Quarto treat every table as `zoom` times its true physical size — hence the
+# need for hand-tuned out-width per table and the inconsistent apparent scale.
+# We rewrite the real resolution (72 * zoom) so the physical size is correct and
+# all tables render at one consistent text scale without per-chunk out-width.
 save_gt <- function(gt_tbl, file, zoom = 3, font_size = 11) {
+  path <- fs::path(out_dir, file)
   gt_tbl |>
     gt::tab_options(table.font.size = gt::px(font_size)) |>
     gt::gtsave(
-      fs::path(out_dir, file),
+      path,
       zoom = zoom,
       expand = 10
     )
+  png::writePNG(png::readPNG(path), path, dpi = 72 * zoom)
+  invisible(path)
 }
 
 

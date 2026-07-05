@@ -21,9 +21,9 @@ library(knitr)
 # Center every figure/table image in the report.
 opts_chunk$set(fig.align = "center")
 
-# Figures live in output/butembo/ at the project root (../ from this .qmd).
+# Figures live in output/ at the project root (see out_dir in R/0_global.R).
 fig <- function(name) {
-  here::here("output", "butembo", name)
+  here::here("output", name)
 }
 
 # Data cut-off: passed in by _render.R (modification time of the positives
@@ -35,7 +35,8 @@ date_cut <- if (nzchar(params$date_updated)) {
 }
 ```
 
-> **Données arrêtées au `r date_cut`.**
+> **Données arrêtées au `r date_cut` - `r aweek::date2week(params$date_updated, floor = 1)`.**
+
 ## Résumé 
 
 Inclure le résumé de la situation
@@ -46,7 +47,6 @@ Synthèse des cas positifs confirmés dans les zones de santé de Butembo et Kat
 
 ```{r}
 #| fig-cap: "Résumé des cas positifs par zone de santé et statut du patient."
-#| out-width: "3in"
 include_graphics(fig("butembo_pos_summary.png"))
 ```
 
@@ -56,30 +56,42 @@ include_graphics(fig("butembo_pos_summary.png"))
 include_graphics(fig("butembo_map_confirmed_reporting.png"))
 ```
 
+### Létalité
+
 ```{r}
-#| fig-cap: "Létalité (CFR) parmi les cas confirmés."
-#| out-width: "4.5in"
+#| fig-cap: "Létalité — brute et ajustée pour le délai début des symptômes → décès."
 include_graphics(fig("butembo_cfr.png"))
+```
+
+```{r}
+#| fig-cap: "Létalité ajustée par groupe d'âge."
+#| out-width: "100%"
+include_graphics(fig("butembo_cfr_age.png"))
 ```
 
 ### Cas actifs
 
 ```{r}
 #| fig-cap: "Cas actifs par zone de santé et lieu d'isolement."
-#| out-width: "4.5in"
 include_graphics(fig("butembo_active_isolation.png"))
 ```
 
 ## Évolution temporelle
 
 ```{r}
-#| fig-cap: "Courbe épidémique hebdomadaire — ensemble des zones."
+#| fig-cap: "Courbe épidémique hebdomadaire par date de notification, par zone de santé."
+#| out-width: "100%"
+include_graphics(fig("butembo_HZ_epicurve_week_notif.png"))
+```
+
+```{r}
+#| fig-cap: "Courbe épidémique hebdomadaire par date de début des symptômes — ensemble des zones."
 #| out-width: "100%"
 include_graphics(fig("butembo_global_epicurve_week.png"))
 ```
 
 ```{r}
-#| fig-cap: "Courbe épidémique hebdomadaire par zone de santé."
+#| fig-cap: "Courbe épidémique hebdomadaire par date de début des symptômes, par zone de santé."
 #| out-width: "100%"
 include_graphics(fig("butembo_HZ_epicurve_week.png"))
 ```
@@ -87,15 +99,22 @@ include_graphics(fig("butembo_HZ_epicurve_week.png"))
 ## Délais épidémiologiques
 
 ```{r}
-#| fig-cap: "Délais entre le début des symptômes et l'issue (décès / guérison)."
+#| fig-cap: "Délais épidémiologiques. (A) Début des symptômes → issue (décès / guérison). (B) Début des symptômes → notification, selon l'issue (décédés / guéris)."
 #| out-width: "100%"
-include_graphics(fig("butembo_delays_boxplot.png"))
+include_graphics(fig("butembo_delays_combined.png"))
+```
+
+## Parcours de soins
+
+```{r}
+#| fig-cap: "Nombre de structures de santé visitées par cas et durée de séjour par structure."
+#| out-width: "100%"
+include_graphics(fig("butembo_hf_visits_distribution.png"))
 ```
 
 ```{r}
-#| fig-cap: "Délais médians (jours) et intervalle interquartile, dont le délai de notification selon l'issue."
-#| out-width: "5.5in"
-include_graphics(fig("butembo_delays_median.png"))
+#| fig-cap: "Structures de santé les plus fréquentées récemment."
+include_graphics(fig("butembo_hf_top_structures.png"))
 ```
 
 ## Caractéristiques des cas
@@ -108,7 +127,6 @@ include_graphics(fig("butembo_age_pyramid.png"))
 
 ```{r}
 #| fig-cap: "Décès à l'arrivée à l'ETC et décès communautaires parmi les cas confirmés."
-#| out-width: "4.5in"
 include_graphics(fig("butembo_mortality_desc.png"))
 ```
 

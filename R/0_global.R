@@ -3,6 +3,7 @@ library(sf)
 library(here)
 library(tmap)
 library(janitor)
+library(patchwork)
 library(tidyverse)
 
 source(here::here("R", "theme.R"))

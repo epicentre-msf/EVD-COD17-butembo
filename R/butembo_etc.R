@@ -83,12 +83,16 @@ nk_symptoms_gt <- nk_symptoms_tbl |>
     locations = gt::cells_body(columns = p.value, rows = p.value < 0.05)
   )
 
+nk_symptoms_png <- fs::path(nk_output_path, "nk_symptoms_table.png")
 gt::gtsave(
   nk_symptoms_gt,
-  fs::path(nk_output_path, "nk_symptoms_table.png"),
+  nk_symptoms_png,
   zoom = 4,
   expand = 5
 )
+# gtsave tags the zoom-inflated PNG at 72 dpi; rewrite the real resolution so
+# the table renders at its true physical size (see save_gt() in R/utils.R).
+png::writePNG(png::readPNG(nk_symptoms_png), nk_symptoms_png, dpi = 72 * 4)
 
 # ! Proportions chart -----------------------------------------------------------
 

@@ -1,5 +1,4 @@
-# Script of the overview situation in Butembo
-# (combines the former 2_overview.R and butembo_active.R)
+# Overview of the situation in Butembo
 
 source(here::here("R", "0_global.R"))
 butembo_pos <- readRDS(latest_narr_ll_clean)
@@ -21,7 +20,6 @@ positives_summary <- pos_data_clean |>
   gtsummary::modify_spanning_header(
     gtsummary::all_stat_cols() ~ "**Zone de santé**"
   ) |>
-  gtsummary::modify_caption("**Cas confirmés par zone de santé**") |>
   gtsummary::modify_source_note(paste0(
     "Données au ",
     fr_date(date_report)
@@ -87,19 +85,14 @@ active_iso_gt <- active_iso |>
     style = gt::cell_text(align = "left"),
     locations = gt::cells_stub()
   ) |>
-  gt::tab_caption(
-    gt::md(paste0(
-      "**Cas actifs par lieu d'isolement — données au ",
-      fr_date(date_report),
-      "**"
-    ))
+  gt::tab_source_note(
+    gt::md(paste0("Données au ", fr_date(date_report)))
   )
 
 active_iso_gt |>
   save_gt("butembo_active_isolation.png")
 
 #? 3. Carte des cas confirmés par aire de santé (adm3) ---------------------------------
-# adm2_isolation / adm3_isolation sont pré-découpés depuis isolation_site_id (voir 1_prep_data.R).
 cases_sf <- adm3 |>
   left_join(
     pos_data_clean |>
@@ -113,10 +106,10 @@ n_located <- sum(!is.na(pos_data_clean$adm3_isolation))
 pct_located <- round(100 * n_located / n_total)
 
 map_caption <- glue::glue(
-  "{n_located} ({pct_located}%) des {n_total} cas ont une information sur l'aire de santé d'isolement"
+  "{n_located} ({pct_located}%) des {n_total} cas ont une information sur l'aire de santé de raportage"
 )
 
-# un point intérieur par aire de santé avec des cas (garanti dans le polygone)
+# un point par aire de santé avec des cas
 cases_pts <- cases_sf |>
   filter(!is.na(n_conf)) |>
   st_point_on_surface()
@@ -157,69 +150,4 @@ tmap_save(
   dpi = 300
 )
 
-#? 4. Létalité (CFR) — cohorte totale et cohorte complète ------------------------------
-
-# Dernière date de début des symptômes jusqu'à laquelle aucun cas n'est encore
-# "Actif" : tous les cas ont atteint une issue terminale (Guéri, Décédé ou Abandon),
-last_complete_onset <- pos_data_clean |>
-  filter(!is.na(date_symptom_onset)) |>
-  summarise(
-    .by = date_symptom_onset,
-    n_active = sum(type_of_exit == "Actif", na.rm = TRUE)
-  ) |>
-  arrange(date_symptom_onset) |>
-  filter(cumall(n_active == 0)) |> # série de tête sans cas encore actif
-  slice_max(date_symptom_onset, n = 1) |>
-  pull(date_symptom_onset)
-
-# Aide : décès / cas résolus (Guéri ou Décédé)
-cfr_summary <- function(df) {
-  df |>
-    summarise(
-      n_death = sum(type_of_exit == "Décédé", na.rm = TRUE),
-      n_resolved = sum(type_of_exit %in% c("Guéri", "Décédé"))
-    )
-}
-
-cfr_tbl <- bind_rows(
-  # Cohorte totale : tous les cas résolus, toute date de début
-  pos_data_clean |>
-    cfr_summary() |>
-    mutate(cohort = "Tous les cas"),
-  # Cohorte complète : début des symptômes au plus tard à la dernière date résolue
-  pos_data_clean |>
-    filter(date_symptom_onset <= last_complete_onset) |>
-    cfr_summary() |>
-    mutate(
-      cohort = paste0(
-        "Cohorte complète (≤ ",
-        format(last_complete_onset, "%d/%m/%Y"),
-        ")"
-      )
-    )
-) |>
-  mutate(cfr = n_death / n_resolved) |>
-  select(cohort, n_death, n_resolved, cfr)
-
-cfr_gt <- cfr_tbl |>
-  gt::gt() |>
-  gt::cols_label(
-    cohort = "Cohorte",
-    n_death = "Décès",
-    n_resolved = "Cas résolus",
-    cfr = "Létalité (CFR)"
-  ) |>
-  gt::fmt_percent(cfr, decimals = 1) |>
-  gt::tab_caption(
-    gt::md(paste0(
-      "**Létalité — cas confirmés — données au ",
-      fr_date(date_report),
-      "**"
-    ))
-  ) |>
-  gt::tab_footnote(
-    "Létalité = décès / cas résolus (Guéri ou Décédé), excluant les cas actifs."
-  )
-
-cfr_gt |>
-  save_gt("butembo_cfr.png")
+# Létalité (CFR) : déplacée dans R/9_cfr.R

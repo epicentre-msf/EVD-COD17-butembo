@@ -38,11 +38,7 @@ alert_adm3 <- alert |>
 
 
 #* GRAPH — new alerts by health zone over time ---------------------
-# Daily new alerts (alert_new) per health zone (adm2), across sitrep dates.
-
-# Theme + colours mirror the HZ epicurve in butembo_time.R.R.
-
-# Shared HZ palette (same as butembo_time.R.R) — reused on the map below.
+# shared HZ palette, reused on the map below
 adm2_cols <- c(
   "Butembo" = "#f08080", # salmon
   "Katwa" = "#3a7ca5" # blue
@@ -63,8 +59,6 @@ alert_hz_ts <- alert_adm2 |>
   ) +
   scale_fill_manual("Zone de santé", values = adm2_cols, drop = FALSE) +
   labs(
-    title = "Alertes notifiées par jour",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Date de notification",
     y = "Nombre d'alertes",
     caption = paste0("Données au ", fr_date(date_report))
@@ -95,8 +89,8 @@ alert_hz_ts
 ggsave(
   fs::path(out_dir, "butembo_alerts_by_hz_time.png"),
   alert_hz_ts,
-  height = 6,
-  width = 10,
+  height = 7,
+  width = 9,
   dpi = 300,
   bg = "white"
 )
@@ -132,7 +126,7 @@ tm_nk_alerts <- tm_basemap_epi() +
       values.range = c(0.4, 1)
     ),
     size.legend = tm_legend(title = "N alertes"),
-    fill = "#ee9b00", # PLACEHOLDER colour
+    fill = "#ee9b00",
     fill_alpha = 0.8,
     col = "white",
     lwd = 0.5

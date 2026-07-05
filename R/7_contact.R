@@ -38,9 +38,7 @@ contact_adm3 <- contact |>
 
 
 #* GRAPH — contacts to follow by health zone over time ---------------------
-# Theme + colours mirror the HZ epicurve in butembo_alert.R.
-
-# Shared HZ palette (same as butembo_alert.R).
+# shared HZ palette
 adm2_cols <- c(
   "Butembo" = "#f08080", # salmon
   "Katwa" = "#3a7ca5" # blue
@@ -79,8 +77,6 @@ contact_hz_ts <- ggplot() +
     expand = expansion(mult = c(0, 0.05))
   ) +
   labs(
-    title = "Contacts à suivre par jour",
-    subtitle = "Zones de santé de Butembo et Katwa, Nord-Kivu, RDC, 2026",
     x = "Date",
     y = "Nombre de contacts à suivre",
     caption = paste0("Données au ", fr_date(date_report))
@@ -112,8 +108,8 @@ contact_hz_ts
 ggsave(
   fs::path(out_dir, "butembo_contacts_by_hz_time.png"),
   contact_hz_ts,
-  height = 13,
-  width = 10,
+  height = 10,
+  width = 8,
   dpi = 300,
   bg = "white"
 )
@@ -122,8 +118,7 @@ ggsave(
 contact_sf <- adm3 |>
   left_join(
     contact_adm3 |>
-      # each zone's own latest sitrep day (Butembo and Katwa update on
-      # different dates, so a single global max would drop the lagging zone)
+      # each zone's own latest sitrep day (zones update on different dates)
       slice_max(sitrep_date, n = 1, by = adm2_name) |>
       select(
         adm2_name,
