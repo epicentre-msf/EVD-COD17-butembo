@@ -20,7 +20,11 @@ inci_notif <- pos_data_clean |>
   filter(!is.na(date_notification)) |>
   count(date_notification) |>
   mutate(
-    week_notification = aweek::date2week(date_notification, floor_day = 1)
+    week_notification = aweek::date2week(
+      date_notification,
+      week_start = 1,
+      floor_day = TRUE
+    )
   )
 
 
@@ -31,15 +35,24 @@ adm2_cols <- c(
 )
 
 inci_adm2_week_notif <- pos_data_clean |>
-  filter(!is.na(week_notification)) |>
-  count(week_notification, adm2_comptabilisation) |>
-  arrange(week_notification)
+  filter(!is.na(date_notification)) |>
+  mutate(
+    week_notification = aweek::date2week(
+      date_notification,
+      week_start = 1,
+      floor_day = TRUE
+    ),
+    week_start = aweek::week2date(week_notification)
+  ) |>
+  count(week_start, adm2_comptabilisation) |>
+  arrange(week_start)
 
 nk_conf_epicurve_notif <- inci_adm2_week_notif |>
-  ggplot(aes(x = week_notification, y = n, fill = adm2_comptabilisation)) +
-  geom_col(width = 0.9, alpha = .7, colour = "white") +
-  scale_x_continuous(
-    breaks = scales::breaks_width(1),
+  ggplot(aes(x = week_start, y = n, fill = adm2_comptabilisation)) +
+  geom_col(width = 6, alpha = .7, colour = "white") +
+  scale_x_date(
+    date_breaks = "1 week",
+    labels = label_epiweek,
     expand = expansion(mult = c(0.01, 0.01))
   ) +
   scale_y_continuous(
@@ -68,6 +81,7 @@ nk_conf_epicurve_notif <- inci_adm2_week_notif |>
     plot.title.position = "plot",
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1),
     axis.ticks.x = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )

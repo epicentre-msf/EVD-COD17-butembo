@@ -1,7 +1,7 @@
 <div align = "center">
 
 # EVD-COD17-butembo
-Epidemiological situation report for the Ebola Virus Disease response in **Butembo & Katwa Health zones (city of Butembo)** (RDC). All sitreps can be found on [this sharepoint]().
+Epidemiological situation report and analyses for the BDBV response in **Butembo & Katwa Health zones (city of Butembo)** (RDC). All sitreps can be found on [this sharepoint](https://msfintl.sharepoint.com/:f:/r/sites/GRP-PAR-RDC/CD153EBOLABUTEMBO/10%20M%C3%A9dical/17%20Epidemiologie/Analyses/rapport%20MSF/Butembo/ocp-sitreps-butembo?csf=1&web=1&e=1tHqJP).
 
 Contact: hugo.soubrier@epicentre.msf.org / msff-butembo-ebola-epidemio@paris.msf.org
 

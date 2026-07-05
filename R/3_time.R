@@ -20,7 +20,11 @@ inci <- pos_data_clean |>
   filter(!is.na(date_symptom_onset)) |>
   count(date_symptom_onset) |>
   mutate(
-    week_symptom_onset = aweek::date2week(date_symptom_onset, floor_day = 1)
+    week_symptom_onset = aweek::date2week(
+      date_symptom_onset,
+      week_start = 1,
+      floor_day = TRUE
+    )
   )
 
 
@@ -34,12 +38,14 @@ inf_cols <- c(
 inci_week <- pos_data_clean |>
   filter(!is.na(date_symptom_onset)) |>
   mutate(
-    week_symptom_onset = aweek::date2week(date_symptom_onset, floor_day = 1)
-  ) |>
-  count(week_symptom_onset, infection_butembo) |>
-  mutate(
+    week_symptom_onset = aweek::date2week(
+      date_symptom_onset,
+      week_start = 1,
+      floor_day = TRUE
+    ),
     week_start = aweek::week2date(week_symptom_onset)
   ) |>
+  count(week_start, infection_butembo) |>
   arrange(week_start)
 
 nk_conf_epicurve_week <- inci_week |>
@@ -47,7 +53,7 @@ nk_conf_epicurve_week <- inci_week |>
   geom_col(width = 6, alpha = .7, colour = "white") +
   scale_x_date(
     date_breaks = "1 week",
-    labels = scales::label_date_short(format = c("%Y", "%b", "%d")),
+    labels = label_epiweek,
     expand = expansion(mult = c(0.01, 0.01))
   ) +
   scale_y_continuous(
@@ -76,6 +82,7 @@ nk_conf_epicurve_week <- inci_week |>
     plot.title.position = "plot",
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1),
     axis.ticks.x = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )
@@ -100,12 +107,14 @@ adm2_cols <- c(
 inci_adm2_week <- pos_data_clean |>
   filter(!is.na(date_symptom_onset)) |>
   mutate(
-    week_symptom_onset = aweek::date2week(date_symptom_onset, floor_day = 1)
-  ) |>
-  count(week_symptom_onset, adm2_comptabilisation) |>
-  mutate(
+    week_symptom_onset = aweek::date2week(
+      date_symptom_onset,
+      week_start = 1,
+      floor_day = TRUE
+    ),
     week_start = aweek::week2date(week_symptom_onset)
   ) |>
+  count(week_start, adm2_comptabilisation) |>
   arrange(week_start)
 
 nk_conf_epicurve <- inci_adm2_week |>
@@ -113,7 +122,7 @@ nk_conf_epicurve <- inci_adm2_week |>
   geom_col(width = 6, alpha = .7, colour = "white") +
   scale_x_date(
     date_breaks = "1 week",
-    labels = scales::label_date_short(format = c("%Y", "%b", "%d")),
+    labels = label_epiweek,
     expand = expansion(mult = c(0.01, 0.01))
   ) +
   scale_y_continuous(
@@ -142,6 +151,7 @@ nk_conf_epicurve <- inci_adm2_week |>
     plot.title.position = "plot",
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1),
     axis.ticks.x = element_line(colour = "grey70"),
     plot.margin = margin(10, 14, 10, 10)
   )

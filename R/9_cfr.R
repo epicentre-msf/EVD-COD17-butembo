@@ -163,31 +163,31 @@ ggsave(
   bg = "white"
 )
 
-#* 3. CFR by age group — delay-adjusted -------------------------------
+#* 3. CFR by age group — crude (non ajustée) --------------------------
+# crude proportion deaths / cases with an exact binomial (Clopper-Pearson) CI,
+# computed directly rather than via cfr::cfr_static. The date-series builder
+# counts cases only when onset is dated but counts every dated death, so fatal
+# cases with a missing onset can make deaths > cases and the estimator errors
+# out — dropping sparse strata like 0-9. Counting all cases in the denominator
+# keeps every stratum valid.
 age_levels <- levels(pos_data_clean$age_group)
 
 cfr_by_age <- pos_data_clean |>
   filter(!is.na(age_group)) |>
-  group_split(age_group) |>
-  purrr::map_dfr(function(df_a) {
-    d <- build_cfr_data(df_a, date_min, date_max)
-    est <- tryCatch(
-      cfr::cfr_static(d, delay_density = delay_density),
-      error = function(e) NULL
-    )
-    if (is.null(est)) {
-      return(NULL)
-    }
-    tibble(
-      age_group = as.character(df_a$age_group[1]),
-      n_cases = sum(d$cases),
-      n_deaths = sum(d$deaths),
-      cfr = est$severity_estimate,
-      low = est$severity_low,
-      high = est$severity_high
-    )
-  }) |>
-  mutate(age_group = factor(age_group, levels = age_levels))
+  summarise(
+    n_cases = dplyr::n(),
+    n_deaths = sum(type_of_exit == "Décédé", na.rm = TRUE),
+    .by = age_group
+  ) |>
+  mutate(
+    cfr = n_deaths / n_cases,
+    ci = purrr::map2(n_deaths, n_cases, ~ binom.test(.x, .y)$conf.int),
+    low = purrr::map_dbl(ci, 1L),
+    high = purrr::map_dbl(ci, 2L),
+    age_group = factor(age_group, levels = age_levels)
+  ) |>
+  select(-ci) |>
+  arrange(age_group)
 
 # sample size on the x-axis labels
 age_xlabs <- setNames(
@@ -220,7 +220,7 @@ butembo_cfr_age <- cfr_by_age |>
     x = "Groupe d'âge",
     y = "Létalité (CFR)",
     caption = paste0(
-      "n = nombre de cas par groupe d'âge · ajustée pour le délai début → décès\n",
+      "n = nombre de cas par groupe d'âge · létalité brute (non ajustée)\n",
       "Données au ",
       fr_date(date_report)
     )

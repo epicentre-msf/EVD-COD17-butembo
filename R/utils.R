@@ -121,3 +121,12 @@ get_country_ref_sp <- function(
 time_stamp <- function() {
   format(Sys.time(), "%Y%m%d")
 }
+
+# ggplot axis labeller: format week-start Dates as French ISO (Monday-start)
+# epiweek labels without the year, e.g. label_epiweek(as.Date("2019-05-13")) ->
+# "S20". Pass to the `labels` argument of scale_x_date on weekly epicurves so
+# ticks read as epiweeks while bars stay positioned on a continuous date axis.
+label_epiweek <- function(x) {
+  wk <- aweek::date2week(x, week_start = 1, floor_day = TRUE)
+  sub("^\\d{4}-W", "S", as.character(wk))
+}
