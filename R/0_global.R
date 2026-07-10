@@ -40,16 +40,24 @@ butembo_project_data_path <- fs::path(
   "Donnees"
 )
 
+#* ETC data --------------------------
+etc_ll_path <- fs::dir_ls(
+  fs::path(
+    butembo_project_data_path,
+    "Liste-linéaire CTE Kitatumba",
+    "exports"
+  )
+) |>
+  max()
+
 butembo_project_sf_data_path <- fs::path(
-  butembo_project_path,
-  "Donnees",
+  butembo_project_data_path,
   "spatiale"
 )
 
 # raw linelist data
 butembo_project_raw_data_path <- fs::path(
-  butembo_project_path,
-  "Donnees",
+  butembo_project_data_path,
   "brute",
   "LL"
 )

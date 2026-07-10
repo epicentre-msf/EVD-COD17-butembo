@@ -173,3 +173,45 @@ top_structures_gt <- top_structures |>
 
 top_structures_gt |>
   save_gt("butembo_hf_top_structures.png")
+
+#* 10 structures ayant notifié le plus de cas — last 3 weeks ----------
+# reporting structure = where the case was located on its notification date
+notif_lookup <- pos_data_clean |>
+  transmute(patient_name, date_notification = as.Date(date_notification)) |>
+  filter(!is.na(date_notification)) |>
+  distinct()
+
+reporting_structures <- hf_visits |>
+  inner_join(notif_lookup, by = "patient_name") |>
+  filter(
+    date_notification >= date_start_HF_visited,
+    is.na(date_end_HF_visited) | date_notification <= date_end_HF_visited,
+    date_notification >= window_start,
+    date_notification <= date_report
+  ) |>
+  # if several overlapping stays match, keep the most recent one
+  slice_max(date_start_HF_visited, by = patient_name, n = 1, with_ties = FALSE) |>
+  count(hf_name, hf_as, hf_zs, name = "n_cas", sort = TRUE) |>
+  slice_head(n = 10)
+
+reporting_structures_gt <- reporting_structures |>
+  gt::gt() |>
+  gt::cols_label(
+    hf_name = "Structure",
+    hf_as = "Aire de santé",
+    hf_zs = "Zone de santé",
+    n_cas = "Cas notifiés"
+  ) |>
+  gt::cols_align(align = "center", columns = n_cas) |>
+  gt::tab_source_note(
+    paste0(
+      "Structure où se trouvait le cas à la date de notification, du ",
+      fr_date(window_start),
+      " au ",
+      fr_date(date_report),
+      "."
+    )
+  )
+
+reporting_structures_gt |>
+  save_gt("butembo_hf_reporting_structures.png")
