@@ -24,6 +24,7 @@ results into a Word report. The analyses cover:
 - **Transmission** — transmission chains analysis
 - **CFR** — case fatality calculation and adjustment. 
 - **Health facilities** — patient care pathways before isolation
+- **Treatment centre (CTE)** — bed occupancy and patient flows (admissions & exits) at CTE Kitatumba
 
 ## Data sources
 All data are stored on the OCP sharepoint for the Butembo project and are only available to authorised access. 
@@ -37,11 +38,15 @@ Alerts and contact data are retrived from the daily sitreps produced by the Heal
 ### Transmission data
 Transmission data are reconstructed using the cases investigations and narratives.
 
+### CTE linelist data
+A separate export for the CTE Kitatumba (*"Liste-linéaire CTE Kitatumba"*) holds the treatment-centre patient linelist and a daily bed-occupancy sheet. It feeds the treatment-centre occupancy and patient-flow tables (`R/etc_analysis.R`).
+
 ## Project layout
 
 - `R/` — numbered analysis scripts, run in order (`0_global.R` sets up paths
   and shared config; `1_prep_data.R` cleans the data; `2_`–`10_` produce the
-  figures written to `output/`).
+  figures written to `output/`). `etc_analysis.R` is a standalone script that
+  builds the CTE occupancy and patient-flow tables.
 - `report/` — the Quarto report (`butembo-report.qmd`), its template, and the
   one-command render pipeline (`_render.R`).
 - `output/` — generated figures (gitignored).
