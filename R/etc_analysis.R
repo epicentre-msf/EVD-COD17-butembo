@@ -141,6 +141,10 @@ etc_flow <- etc_ll |>
         type_of_exit,
         regex("gu[ée]ri", ignore_case = TRUE)
       ) ~ "Guéris",
+      str_detect(
+        type_of_exit,
+        regex("d[ée]c[ée]d", ignore_case = TRUE)
+      ) ~ "Décédés",
       .default = "Autre"
     )
   )
@@ -162,7 +166,8 @@ flux_counts <- function(n) {
     adm_suspect = sum(adm & !etc_flow$admitted_confirmed),
     adm_confirmed = sum(adm & etc_flow$admitted_confirmed),
     exit_noncase = sum(ext & etc_flow$exit_reason == "Non cas"),
-    exit_cured = sum(ext & etc_flow$exit_reason == "Guéris")
+    exit_cured = sum(ext & etc_flow$exit_reason == "Guéris"),
+    exit_death = sum(ext & etc_flow$exit_reason == "Décédés")
   )
 }
 
@@ -170,9 +175,15 @@ flux_mat <- sapply(c(j1 = 1, j2 = 2, j7 = 7), flux_counts)
 
 flow_tbl <- tibble(
   site = "CTE Kitatumba",
-  flux = c("Admissions", "Admissions", "Sorties", "Sorties"),
-  categorie = c("Suspects", "Confirmés", "Non cas", "Guéris"),
-  key = c("adm_suspect", "adm_confirmed", "exit_noncase", "exit_cured")
+  flux = c("Admissions", "Admissions", "Sorties", "Sorties", "Sorties"),
+  categorie = c("Suspects", "Confirmés", "Non cas", "Guéris", "Décédés"),
+  key = c(
+    "adm_suspect",
+    "adm_confirmed",
+    "exit_noncase",
+    "exit_cured",
+    "exit_death"
+  )
 ) |>
   mutate(
     j1 = flux_mat[key, "j1"],
@@ -214,9 +225,9 @@ flow_reactable <- reactable::reactable(
     site = reactable::colDef(name = "CTE", align = "left"),
     flux = reactable::colDef(name = "Flux", align = "left"),
     categorie = reactable::colDef(name = "", align = "left"),
-    j1 = count_col("Last 1d"),
-    j2 = count_col("Last 2d"),
-    j7 = count_col("Last 7d")
+    j1 = count_col("dernières 24h"),
+    j2 = count_col("dernières 48h"),
+    j7 = count_col("derniers 7j")
   )
 )
 
@@ -224,6 +235,7 @@ flow_reactable <- reactable::reactable(
 site_name <- unique(flow_tbl$site)
 
 etc_panel <- htmltools::browsable(htmltools::div(
+  class = "etc-panel",
   style = "font-family: sans-serif; max-width: 900px; border: 1px solid #dee2e6; border-radius: 6px; padding: 14px 18px;",
   htmltools::h2(site_name, style = "margin: 0; font-size: 1.25rem;"),
   htmltools::div(
@@ -243,3 +255,7 @@ etc_panel <- htmltools::browsable(htmltools::div(
 ))
 
 etc_panel
+
+#* EXPORT POUR LE RAPPORT ----------------------------------------------
+# panneau complet (occupation + flux) en PNG pour la version .docx du rapport
+save_widget(etc_panel, "butembo_etc_panel.png", selector = ".etc-panel")

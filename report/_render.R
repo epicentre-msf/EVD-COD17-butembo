@@ -7,15 +7,16 @@ setwd(here::here())
 # the plotting scripts then read it and write PNGs to output/butembo/.
 scripts <- c(
   "1_prep_data.R", # must run first: prepares the clean data
-  "2_overview.R", # pos_summary, reporting_hf, map_confirmed_reporting
-  "3_time.R", # global + HZ epicurves
-  "3b_time_notification.R", # global + HZ epicurves by notification date
+  "2_overview.R", # pos_summary, active isolation
+  "3_time.R", # global + HZ epicurves (onset + notification date)
   "4_person.R", # age pyramid
+  "4_place.R", # cartes: notification, résidence, délai notification
   "5_delays.R", # delay
   "6_alert.R", # alerts overview + map
   "7_contact.R", # contact tracing overview + map
   "9_cfr.R", # létalité (CFR)
-  "10_health-facilitiesf.R" # parcours de soins (structures visitées)
+  "10_health-facilitiesf.R", # parcours de soins (structures visitées)
+  "etc_analysis.R" # situation CTE (occupation + flux) -> butembo_etc_panel.png
 )
 
 for (s in scripts) {

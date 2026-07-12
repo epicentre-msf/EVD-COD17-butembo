@@ -12,7 +12,7 @@ export_prefix <- "BUT-EVD"
 
 #* Import data ------------------------------------------------------------
 #! Check before running - which Health zone to include
-FILTER_HZ <- c("Butembo", "Katwa")
+FILTER_HZ <- c("Butembo", "Katwa", "Musienene")
 
 # load the latest linelist
 ll_narr <- rpxl::rp_xlsb(latest_narr_ll, password = "ebolaExport", sheet = 1) |>
@@ -37,6 +37,7 @@ ll_narr_clean <- ll_narr |>
       "Décédé"
     ),
     infection_butembo = case_when(
+      infection_butembo == "Musienene" ~ "Locale",
       infection_butembo == "Oui" ~ "Locale",
       infection_butembo == "Non" ~ "Importée",
       .default = "Incertaine"
@@ -66,7 +67,21 @@ ll_narr_clean <- ll_narr |>
       isolation_site_id,
       fixed("|"),
       1
-    ))
+    )),
+
+    adm1_name = case_when(
+      res_equal_onset == "Oui" ~ adm1_name__res,
+      .default = adm1_name__onset
+    ),
+    adm2_name = case_when(
+      res_equal_onset == "Oui" ~ adm2_name__res,
+      .default = adm2_name__onset
+    ),
+
+    adm3_name = case_when(
+      res_equal_onset == "Oui" ~ adm3_name__res,
+      .default = adm3_name__onset
+    )
   ) |>
   rename(pid = patient_site_id)
 
@@ -119,6 +134,20 @@ saveRDS(
 
 #* ALERTS DATABASE ----------------------------
 
+# harmonise les noms d'aires de santé (adm3) des sitreps sur ceux du fond de carte
+clean_adm3 <- function(x) {
+  x <- str_to_sentence(str_squish(x))
+  case_when(
+    str_detect(x, regex("musayi", ignore_case = TRUE)) ~ "Maman Musayi",
+    x %in% c("Wanama", "Wanamahi") ~ "Wanamahika",
+    x == "Monde" ~ "Mondo",
+    x %in% c("Kangike", "Yangike") ~ "Kyangike",
+    # Misebere : nouvelle aire de santé rattachée à Kambuli
+    x == "Misebere" ~ "Kambuli",
+    .default = x
+  )
+}
+
 alert <- rio::import(sitrep_path, which = "alert") |>
   as_tibble()
 
@@ -132,7 +161,8 @@ alert_clean <- alert |>
     across(
       c(contains("adm")),
       ~ str_squish(.x)
-    )
+    ),
+    adm3_name = clean_adm3(adm3_name)
   )
 
 file_base <- glue::glue(
@@ -160,7 +190,8 @@ contact_clean <- contact |>
     across(
       c(contains("adm")),
       ~ str_squish(.x)
-    )
+    ),
+    adm3_name = clean_adm3(adm3_name)
   )
 
 

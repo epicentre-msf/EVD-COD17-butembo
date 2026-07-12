@@ -56,6 +56,26 @@ include_graphics(fig("butembo_pos_summary.png"))
 include_graphics(fig("butembo_map_confirmed_reporting.png"))
 ```
 
+### Cas par zone de santé et aire de santé
+
+```{r}
+#| fig-cap: "Zone de santé de Butembo — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
+#| out-width: "100%"
+include_graphics(fig("butembo_cases_by_place_butembo.png"))
+```
+
+```{r}
+#| fig-cap: "Zone de santé de Katwa — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
+#| out-width: "100%"
+include_graphics(fig("butembo_cases_by_place_katwa.png"))
+```
+
+```{r}
+#| fig-cap: "Zone de santé de Musienene — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
+#| out-width: "100%"
+include_graphics(fig("butembo_cases_by_place_musienene.png"))
+```
+
 ### Létalité
 
 ```{r}
@@ -74,6 +94,13 @@ include_graphics(fig("butembo_cfr_age.png"))
 ```{r}
 #| fig-cap: "Cas actifs par zone de santé et lieu d'isolement."
 include_graphics(fig("butembo_active_isolation.png"))
+```
+
+## Activités du CTE
+
+```{r}
+#| fig-cap: "Situation du CTE (Kitatumba) — occupation des lits et flux (admissions & sorties) sur les dernières 24h, 48h et 7 jours."
+include_graphics(fig("butembo_etc_panel.png"))
 ```
 
 ## Évolution temporelle
@@ -104,6 +131,12 @@ include_graphics(fig("butembo_HZ_epicurve_week.png"))
 include_graphics(fig("butembo_delays_combined.png"))
 ```
 
+```{r}
+#| fig-cap: "Délais épidémiologiques. (A) Début des symptômes → issue (décès / guérison). (B) Début des symptômes → notification, selon l'issue (décédés / guéris)."
+#| out-width: "100%"
+include_graphics(fig("butembo_map_delay_notification.png"))
+```
+
 ## Parcours de soins
 
 ```{r}
@@ -130,30 +163,6 @@ include_graphics(fig("butembo_age_pyramid.png"))
 include_graphics(fig("butembo_mortality_desc.png"))
 ```
 
-## Alertes
+## Alertes & Suivi des contacts
 
-```{r}
-#| fig-cap: "Synthèse du suivi des alertes."
-#| out-width: "6in"
-include_graphics(fig("butembo_alerts_by_hz_time.png"))
-```
-
-```{r}
-#| fig-cap: "Distribution spatiale des alertes."
-#| out-width: "100%"
-include_graphics(fig("butembo_map_alerts.png"))
-```
-
-## Suivi des contacts
-
-```{r}
-#| fig-cap: "Synthèse du suivi temporelle des contacts."
-#| out-width: "5.5in"
-include_graphics(fig("butembo_contacts_by_hz_time.png"))
-```
-
-```{r}
-#| fig-cap: "Distribution spatiale du suivi des contacts."
-#| out-width: "100%"
-include_graphics(fig("butembo_map_contact.png"))
-```
+Les données sur les alertes et le suivi des contacts sont continuellement mises à jour dans le dashboard GIS: [CLIQUEZ ICI](https://geo.geomsf.org/portal/apps/experiencebuilder/experience/?id=a2c93a9d301a49df8f3d19e36b6a8005&page=Suivi-des-Alertes-et-des-Contacts)

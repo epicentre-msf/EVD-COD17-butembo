@@ -66,7 +66,76 @@ tmap_save(
   dpi = 300
 )
 
-#? 1. Carte à points — cas confirmés par aire de santé de résidence ---------
+#? 1. Carte à points — cas confirmés par aire de santé de notification ------
+
+# confirmés par aire de santé de notification (rapportage), joints à l'adm3
+rep_sf <- adm3 |>
+  left_join(
+    pos_data_clean |>
+      count(adm3_isolation, name = "n_conf"),
+    by = join_by("adm3_name" == "adm3_isolation")
+  )
+
+# part des cas confirmés avec une aire de santé de notification connue (adm3)
+n_located_rep <- sum(!is.na(pos_data_clean$adm3_isolation))
+pct_located_rep <- round(100 * n_located_rep / n_total)
+
+rep_caption <- glue::glue(
+  "{n_located_rep} ({pct_located_rep}%) des {n_total} cas ont une information sur l'aire de santé de rapportage"
+)
+
+# un point par aire de santé de notification avec des cas
+rep_pts <- rep_sf |>
+  filter(!is.na(n_conf)) |>
+  st_point_on_surface()
+
+tm_butembo_conf <- tm_basemap_epi() +
+  # toutes les limites d'aires de santé (y compris sans cas)
+  tm_shape(adm3, bbox = st_bbox(adm3)) +
+  tm_borders(col = "grey60", lwd = 1) +
+  # étiquettes des aires de santé, placées dans le polygone
+  tm_text(
+    text = "adm3_name",
+    size = 0.5,
+    col = "grey40",
+    shadow = TRUE,
+    just = "top",
+    ymod = -0.35,
+    remove_overlap = TRUE
+  ) +
+  # limites de zones de santé au-dessus
+  tm_shape(adm2) +
+  tm_borders(col = "grey20", lwd = 1.3) +
+  # cercles proportionnels aux centroïdes
+  tm_shape(rep_pts) +
+  tm_symbols(
+    size = "n_conf",
+    size.scale = tm_scale_continuous(
+      values.scale = 2,
+      values.range = c(0.4, 1)
+    ),
+    size.legend = tm_legend(title = "N cas"),
+    fill = "#bb3e03",
+    fill_alpha = 0.8,
+    col = "white",
+    lwd = 0.5
+  ) +
+  tm_text("n_conf", size = 0.6, col = "white") +
+  tm_theme_epi(
+    credits = rep_caption,
+    date = date_report,
+    scalebar_breaks = c(0, 5, 10)
+  )
+
+tmap_save(
+  tm_butembo_conf,
+  fs::path(out_dir, "butembo_map_confirmed_reporting.png"),
+  height = 8,
+  width = 8,
+  dpi = 300
+)
+
+#? 2. Carte à points — cas confirmés par aire de santé de résidence ---------
 
 # un point par aire de santé de résidence avec des cas
 res_pts <- cases_sf |>
@@ -113,7 +182,7 @@ tmap_save(
   dpi = 300
 )
 
-#? 2. Choroplèthe — délai début des symptômes → notification par aire de santé ----
+#? 3. Choroplèthe — délai début des symptômes → notification par aire de santé ----
 
 # délai médian (jours) début des symptômes → notification par aire de santé
 delay_sf <- adm3 |>

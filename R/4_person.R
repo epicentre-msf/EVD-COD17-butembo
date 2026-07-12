@@ -97,3 +97,26 @@ ggsave(
   dpi = 300,
   bg = "white"
 )
+
+#* Cases by age group (table) ------------------------------------------
+inf_age_tbl <- pos_data_clean |>
+  filter(!is.na(age_group)) |>
+  count(age_group, .drop = FALSE) |>
+  arrange(age_group) |>
+  mutate(
+    pct = n / sum(n),
+    n_pct = paste0(n, " (", scales::percent(pct, accuracy = 0.1), ")")
+  ) |>
+  select(age_group, n_pct)
+
+inf_age_gt <- inf_age_tbl |>
+  gt::gt(rowname_col = "age_group") |>
+  gt::tab_stubhead(label = "Groupe d'âge") |>
+  gt::cols_label(n_pct = "N (%)") |>
+  gt::cols_align(align = "center", columns = n_pct) |>
+  gt::tab_source_note(
+    gt::md(paste0("Données au ", fr_date(date_report)))
+  )
+
+inf_age_gt |>
+  save_gt("butembo_infection_age.png")

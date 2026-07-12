@@ -46,6 +46,21 @@ save_gt <- function(gt_tbl, file, zoom = 3, font_size = 11) {
   invisible(path)
 }
 
+# Save an htmlwidget or htmltools tag (e.g. a reactable or a div wrapping
+# several) to out_dir as a PNG via headless Chrome. selector crops tight to the
+# target; zoom / dpi rewrite mirror save_gt() so tables render at one consistent
+# physical scale in Word. save_html() keeps the lib/ sidecar in a temp dir,
+# avoiding the pandoc dependency of a self-contained file.
+save_widget <- function(widget, file, selector = ".reactable", zoom = 3) {
+  path <- fs::path(out_dir, file)
+  html <- fs::path(fs::file_temp(), "widget.html")
+  fs::dir_create(fs::path_dir(html))
+  htmltools::save_html(widget, html)
+  webshot2::webshot(html, path, selector = selector, zoom = zoom, delay = 0.5)
+  png::writePNG(png::readPNG(path), path, dpi = 72 * zoom)
+  invisible(path)
+}
+
 
 get_admin_level_sp <- function(
   country,

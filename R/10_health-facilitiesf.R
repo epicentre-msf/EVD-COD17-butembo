@@ -190,7 +190,12 @@ reporting_structures <- hf_visits |>
     date_notification <= date_report
   ) |>
   # if several overlapping stays match, keep the most recent one
-  slice_max(date_start_HF_visited, by = patient_name, n = 1, with_ties = FALSE) |>
+  slice_max(
+    date_start_HF_visited,
+    by = patient_name,
+    n = 1,
+    with_ties = FALSE
+  ) |>
   count(hf_name, hf_as, hf_zs, name = "n_cas", sort = TRUE) |>
   slice_head(n = 10)
 
