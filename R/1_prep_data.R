@@ -163,6 +163,11 @@ alert <- rio::import(sitrep_path, which = "alert") |>
   )
 
 alert_clean <- alert |>
+  rename(
+    suspect_sampled = suspect_preleves,
+    suspect_isolated = suspect_isoles,
+    adm3_name = adm3_nom
+  ) |>
   mutate(
     sitrep_date = ymd(sitrep_date),
     across(
@@ -204,6 +209,9 @@ contact <- rio::import(sitrep_path, which = "contact") |>
   )
 
 contact_clean <- contact |>
+  rename(
+      adm3_name = adm3_nom
+  ) |>
   mutate(
     sitrep_date = ymd(sitrep_date),
     across(contains("contact"), ~ as.numeric(str_squish(.x))),

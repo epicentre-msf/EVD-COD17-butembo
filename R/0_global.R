@@ -29,10 +29,21 @@ compilation_linelist_path <- fs::dir_ls(
 
 #* BUTEMBO PATH ------------------------------------
 
-butembo_project_path <- fs::path(
-  onedrive,
-  'OCP - Workplace RDC - 17 Epidemiologie'
-)
+if (Sys.info()[["nodename"]] == "dell-ff") {
+  butembo_project_path <- fs::path(
+    onedrive,
+    'OCP - Workplace RDC - CD153 EBOLA BUTEMBO',
+    '10 Médical',
+    '17 Epidemiologie'
+  )
+} else {
+  butembo_project_path <- fs::path(
+    onedrive,
+    'OCP - Workplace RDC - 17 Epidemiologie'
+  )
+}
+
+
 
 # Sharepoint path to the butembo project data
 butembo_project_data_path <- fs::path(
@@ -44,7 +55,7 @@ butembo_project_data_path <- fs::path(
 etc_ll_path <- fs::dir_ls(
   fs::path(
     butembo_project_data_path,
-    "Liste-linéaire CTE Kitatumba",
+    "Liste-lin\u00e9aire CTE Kitatumba",
     "exports"
   )
 ) |>
