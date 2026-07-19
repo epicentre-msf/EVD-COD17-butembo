@@ -120,3 +120,75 @@ inf_age_gt <- inf_age_tbl |>
 
 inf_age_gt |>
   save_gt("butembo_infection_age.png")
+
+#* Cases by age group (reactable) --------------------------------------
+case_ramp <- c("#ffffff", "#fd7e14")
+
+ramp_style <- function(ramp, domain) {
+  pal <- scales::colour_ramp(ramp)
+  function(value) {
+    if (is.null(value) || is.na(value)) {
+      return(list())
+    }
+    frac <- max(0, min(1, (value - domain[1]) / (domain[2] - domain[1])))
+    list(background = pal(frac))
+  }
+}
+
+age_rctbl_data <- pos_data_clean |>
+  filter(!is.na(age_group)) |>
+  count(age_group, .drop = FALSE) |>
+  arrange(age_group) |>
+  mutate(
+    pct = n / sum(n),
+    n_pct = paste0(n, " (", scales::percent(pct, accuracy = 0.1), ")")
+  )
+
+age_reactable <- reactable::reactable(
+  age_rctbl_data[c("age_group", "n", "n_pct")],
+  highlight = TRUE,
+  compact = TRUE,
+  striped = FALSE,
+  pagination = FALSE,
+  theme = reactable::reactableTheme(
+    style = list(fontSize = "0.82rem"),
+    headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
+    footerStyle = list(fontWeight = 600),
+    cellPadding = "4px 6px"
+  ),
+  defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+  columns = list(
+    age_group = reactable::colDef(
+      name = "Groupe d'âge",
+      align = "left",
+      sticky = "left",
+      footer = "Total"
+    ),
+    n = reactable::colDef(
+      name = "N (%)",
+      style = ramp_style(case_ramp, c(0, max(age_rctbl_data$n))),
+      cell = function(value, index) age_rctbl_data$n_pct[index],
+      footer = sum(age_rctbl_data$n)
+    ),
+    n_pct = reactable::colDef(show = FALSE)
+  )
+)
+
+age_panel <- htmltools::browsable(htmltools::div(
+  class = "age-summary",
+  style = "font-family: sans-serif; max-width: 420px; border: 1px solid #dee2e6; border-radius: 6px; padding: 14px 18px;",
+  htmltools::h2(
+    "Cas confirmés par groupe d'âge",
+    style = "margin: 0; font-size: 1.25rem;"
+  ),
+  htmltools::div(
+    paste0("Données au ", fr_date(date_report)),
+    style = "color: #6c757d; font-size: 0.85rem; margin-bottom: 14px;"
+  ),
+  age_reactable
+))
+
+age_panel
+
+age_panel |>
+  save_widget("butembo_infection_age_reactable.png", selector = ".age-summary")

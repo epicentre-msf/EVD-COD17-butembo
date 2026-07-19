@@ -34,6 +34,19 @@ inf_cols <- c(
   "Incertaine" = "grey75"
 )
 
+# atténue les semaines récentes, vraisemblablement incomplètes (délai de
+# notification) : 3 dernières semaines pour le début des symptômes, 1 pour la
+# notification
+alpha_complete <- 0.7
+alpha_recent <- 0.25
+n_recent_onset <- 3
+n_recent_notif <- 1
+
+# TRUE pour les `n` dernières semaines calendaires présentes dans les données
+flag_recent <- function(week_start, n) {
+  week_start >= max(week_start) - lubridate::weeks(n - 1)
+}
+
 inci_week <- pos_data_clean |>
   filter(!is.na(date_symptom_onset)) |>
   mutate(
@@ -45,11 +58,19 @@ inci_week <- pos_data_clean |>
     week_start = aweek::week2date(week_symptom_onset)
   ) |>
   count(week_start, infection_butembo) |>
-  arrange(week_start)
+  arrange(week_start) |>
+  mutate(
+    bar_alpha = if_else(
+      flag_recent(week_start, n_recent_onset),
+      alpha_recent,
+      alpha_complete
+    )
+  )
 
 nk_conf_epicurve_week <- inci_week |>
   ggplot(aes(x = week_start, y = n, fill = infection_butembo)) +
-  geom_col(width = 6, alpha = .7, colour = "white") +
+  geom_col(aes(alpha = bar_alpha), width = 6, colour = "white") +
+  scale_alpha_identity() +
   scale_x_date(
     date_breaks = "1 week",
     labels = label_epiweek,
@@ -115,11 +136,19 @@ inci_adm2_week <- pos_data_clean |>
     week_start = aweek::week2date(week_symptom_onset)
   ) |>
   count(week_start, adm2_comptabilisation) |>
-  arrange(week_start)
+  arrange(week_start) |>
+  mutate(
+    bar_alpha = if_else(
+      flag_recent(week_start, n_recent_onset),
+      alpha_recent,
+      alpha_complete
+    )
+  )
 
 nk_conf_epicurve <- inci_adm2_week |>
   ggplot(aes(x = week_start, y = n, fill = adm2_comptabilisation)) +
-  geom_col(width = 6, alpha = .7, colour = "white") +
+  geom_col(aes(alpha = bar_alpha), width = 6, colour = "white") +
+  scale_alpha_identity() +
   scale_x_date(
     date_breaks = "1 week",
     labels = label_epiweek,
@@ -201,11 +230,19 @@ inci_adm2_week_notif <- pos_data_clean |>
     week_start = aweek::week2date(week_notification)
   ) |>
   count(week_start, adm2_comptabilisation) |>
-  arrange(week_start)
+  arrange(week_start) |>
+  mutate(
+    bar_alpha = if_else(
+      flag_recent(week_start, n_recent_notif),
+      alpha_recent,
+      alpha_complete
+    )
+  )
 
 nk_conf_epicurve_notif <- inci_adm2_week_notif |>
   ggplot(aes(x = week_start, y = n, fill = adm2_comptabilisation)) +
-  geom_col(width = 6, alpha = .7, colour = "white") +
+  geom_col(aes(alpha = bar_alpha), width = 6, colour = "white") +
+  scale_alpha_identity() +
   scale_x_date(
     date_breaks = "1 week",
     labels = label_epiweek,

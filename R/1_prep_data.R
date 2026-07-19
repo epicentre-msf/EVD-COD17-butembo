@@ -149,7 +149,18 @@ clean_adm3 <- function(x) {
 }
 
 alert <- rio::import(sitrep_path, which = "alert") |>
-  as_tibble()
+  as_tibble() |>
+  rename(
+    adm2_name = adm2_nom,
+    adm3_name = adm3_nom,
+    alert_new = alert_nouvelles,
+    alert_alive = alert_vivantes,
+    alert_dead = alert_decedee,
+    alert_investigated = alert_investiguees,
+    alert_validated = alert_validees,
+    suspect_sampled = suspect_preleves,
+    suspect_isolated = suspect_isoles
+  )
 
 alert_clean <- alert |>
   mutate(
@@ -181,7 +192,16 @@ saveRDS(
 #* CONTACTS DATABASE ----------------------------
 
 contact <- rio::import(sitrep_path, which = "contact") |>
-  as_tibble()
+  as_tibble() |>
+  rename(
+    adm2_name = adm2_nom,
+    adm3_name = adm3_nom,
+    contact_new = contact_nouveaux,
+    contact_to_follow = contact_a_suivre,
+    contact_seen = contact_vus,
+    contact_suspect = contact_suspects,
+    contact_exit = contact_sortis_21
+  )
 
 contact_clean <- contact |>
   mutate(
@@ -193,7 +213,6 @@ contact_clean <- contact |>
     ),
     adm3_name = clean_adm3(adm3_name)
   )
-
 
 file_base <- glue::glue(
   "{export_prefix}_BUTEMBO_contact-data__{time_write}"

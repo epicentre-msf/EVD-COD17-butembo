@@ -46,7 +46,7 @@ Inclure le résumé de la situation
 Synthèse des cas positifs confirmés dans les zones de santé de Butembo et Katwa.
 
 ```{r}
-#| fig-cap: "Résumé des cas positifs par zone de santé et statut du patient."
+#| fig-cap: "Résumé des cas confirmés par zone de santé : nouveaux cas récents et statut du patient."
 include_graphics(fig("butembo_pos_summary.png"))
 ```
 
@@ -87,13 +87,6 @@ include_graphics(fig("butembo_cfr.png"))
 #| fig-cap: "Létalité ajustée par groupe d'âge."
 #| out-width: "100%"
 include_graphics(fig("butembo_cfr_age.png"))
-```
-
-### Cas actifs
-
-```{r}
-#| fig-cap: "Cas actifs par zone de santé et lieu d'isolement."
-include_graphics(fig("butembo_active_isolation.png"))
 ```
 
 ## Activités du CTE
@@ -146,7 +139,7 @@ include_graphics(fig("butembo_hf_visits_distribution.png"))
 ```
 
 ```{r}
-#| fig-cap: "Structures de santé les plus fréquentées récemment."
+#| fig-cap: "Structures de santé ayant vu le plus de cas dans les 7 / 14 / 21 derniers jours (CTE exclus)."
 include_graphics(fig("butembo_hf_top_structures.png"))
 ```
 
@@ -161,6 +154,20 @@ include_graphics(fig("butembo_age_pyramid.png"))
 ```{r}
 #| fig-cap: "Décès à l'arrivée à l'ETC et décès communautaires parmi les cas confirmés."
 include_graphics(fig("butembo_mortality_desc.png"))
+```
+
+## Chaînes de transmission
+
+```{r}
+#| fig-cap: "Lien de transmission, origine de l'infection, suivi comme contact et type de transmission parmi les infections locales."
+#| out-width: "100%"
+include_graphics(fig("butembo_transmission_overview.png"))
+```
+
+```{r}
+#| fig-cap: "Chaînes de transmission des cas confirmés, positionnées par date de début des symptômes. Chaque cas est coloré selon son statut ; les liens indiquent une transmission par contact connu (trait plein) ou hypothétique (pointillés)."
+#| out-width: "100%"
+include_graphics(fig("butembo_transmission_chains.png"))
 ```
 
 ## Alertes & Suivi des contacts

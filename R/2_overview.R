@@ -6,28 +6,148 @@ pos_data_clean <- butembo_pos$data
 date_report <- butembo_pos$date_updated # source-file modification date (Date)
 
 #? 1. Statut des cas par zone de santé ---------------------------------------------------
-# Statut du patient (Actif / Guéri / Abandon / Décédé) et effectif par zone de santé.
-positives_summary <- pos_data_clean |>
-  select(adm2_comptabilisation, type_of_exit) |>
-  gtsummary::tbl_summary(
-    by = adm2_comptabilisation,
-    label = list(
-      type_of_exit ~ "Statut du patient"
-    ),
-    missing_text = "Inconnu"
-  ) |>
-  gtsummary::modify_header(label ~ "") |>
-  gtsummary::modify_spanning_header(
-    gtsummary::all_stat_cols() ~ "**Zone de santé**"
-  ) |>
-  gtsummary::modify_source_note(paste0(
-    "Données au ",
-    fr_date(date_report)
-  ))
+# Effectif, nouveaux cas récents et statut (Actif / Guéri / Abandon / Décédé)
+# par zone de santé, présentés en reactable.
 
-positives_summary |>
-  gtsummary::as_gt() |>
-  save_gt("butembo_pos_summary.png")
+case_ramp <- c("#ffffff", "#fd7e14")
+
+ramp_style <- function(ramp, domain) {
+  pal <- scales::colour_ramp(ramp)
+  function(value) {
+    if (is.null(value) || is.na(value)) {
+      return(list())
+    }
+    frac <- max(0, min(1, (value - domain[1]) / (domain[2] - domain[1])))
+    list(background = pal(frac))
+  }
+}
+
+# fenêtres de nouveaux cas (notification), cumulatives et ancrées sur la date
+# du rapport : 7j inclus dans 14j inclus dans 21j
+status_levels <- c("Actif", "Guéri", "Abandon", "Décédé")
+n_since <- function(d, n) {
+  sum(d >= date_report - (n - 1) & d <= date_report, na.rm = TRUE)
+}
+
+positives_summary <- pos_data_clean |>
+  mutate(
+    zone = forcats::fct_relevel(
+      adm2_comptabilisation,
+      "Butembo",
+      "Katwa",
+      "Musienene"
+    ),
+    date_notification = as.Date(date_notification),
+    type_of_exit = as.character(type_of_exit)
+  ) |>
+  summarise(
+    .by = zone,
+    total = dplyr::n(),
+    j7 = n_since(date_notification, 7),
+    j14 = n_since(date_notification, 14),
+    j21 = n_since(date_notification, 21),
+    Actif = sum(type_of_exit == "Actif", na.rm = TRUE),
+    Guéri = sum(type_of_exit == "Guéri", na.rm = TRUE),
+    Abandon = sum(type_of_exit == "Abandon", na.rm = TRUE),
+    Décédé = sum(type_of_exit == "Décédé", na.rm = TRUE)
+  ) |>
+  arrange(zone)
+
+# totaux (pied de tableau)
+tot <- positives_summary |>
+  summarise(across(where(is.numeric), sum))
+
+# domaines des dégradés (partagés par groupe de colonnes)
+dom_new <- c(0, max(positives_summary$j21))
+dom_status <- c(0, max(positives_summary[status_levels]))
+
+# thème et colonnes communes aux deux tableaux
+pos_theme <- reactable::reactableTheme(
+  style = list(fontSize = "0.82rem"),
+  headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
+  footerStyle = list(fontWeight = 600),
+  cellPadding = "4px 6px"
+)
+
+zone_col <- reactable::colDef(
+  name = "Zone de santé",
+  align = "left",
+  sticky = "left",
+  footer = "Total"
+)
+
+count_col <- function(id, nm, domain) {
+  reactable::colDef(
+    name = nm,
+    style = ramp_style(case_ramp, domain),
+    footer = tot[[id]]
+  )
+}
+
+# tableau 1 — nouveaux cas récents (notification)
+new_cases_reactable <- reactable::reactable(
+  positives_summary[c("zone", "j7", "j14", "j21")],
+  highlight = TRUE,
+  compact = TRUE,
+  striped = FALSE,
+  pagination = FALSE,
+  theme = pos_theme,
+  defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+  columns = list(
+    zone = zone_col,
+    j7 = count_col("j7", "7 j", dom_new),
+    j14 = count_col("j14", "14 j", dom_new),
+    j21 = count_col("j21", "21 j", dom_new)
+  )
+)
+
+# tableau 2 — statut global des cas
+status_reactable <- reactable::reactable(
+  positives_summary[c("zone", "total", status_levels)],
+  highlight = TRUE,
+  compact = TRUE,
+  striped = FALSE,
+  pagination = FALSE,
+  theme = pos_theme,
+  defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+  columns = list(
+    zone = zone_col,
+    total = count_col("total", "Total", c(0, max(positives_summary$total))),
+    Actif = count_col("Actif", "Actif", dom_status),
+    Guéri = count_col("Guéri", "Guéri", dom_status),
+    Abandon = count_col("Abandon", "Abandon", dom_status),
+    Décédé = count_col("Décédé", "Décédé", dom_status)
+  )
+)
+
+# panneau centralisé : nouveaux cas + statut global
+positives_panel <- htmltools::browsable(htmltools::div(
+  class = "pos-summary",
+  style = "font-family: sans-serif; max-width: 900px; border: 1px solid #dee2e6; border-radius: 6px; padding: 14px 18px;",
+  htmltools::h2(
+    "Cas confirmés par zone de santé",
+    style = "margin: 0; font-size: 1.25rem;"
+  ),
+  htmltools::div(
+    paste0("Données au ", fr_date(date_report)),
+    style = "color: #6c757d; font-size: 0.85rem; margin-bottom: 14px;"
+  ),
+  htmltools::h4(
+    "Nouveaux cas",
+    style = "margin: 10px 0 4px; font-size: 0.95rem;"
+  ),
+  new_cases_reactable,
+  htmltools::h4(
+    "Statut global des cas",
+    style = "margin: 18px 0 4px; font-size: 0.95rem;"
+  ),
+  status_reactable
+))
+
+positives_panel
+
+positives_panel |>
+  save_widget("butembo_pos_summary.png", selector = ".pos-summary")
 
 #? 2. Cas actifs par lieu d'isolement ---------------------------------------------------
 
