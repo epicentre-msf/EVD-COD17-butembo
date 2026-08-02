@@ -41,6 +41,7 @@ temp/
 data/
 local/
 output/
+out/
 
 # Renv
 renv/
