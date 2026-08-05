@@ -51,3 +51,7 @@ renv.lock
 .Renviron
 .Rprofile
 .r-agent/
+
+
+# python venv
+.venv
