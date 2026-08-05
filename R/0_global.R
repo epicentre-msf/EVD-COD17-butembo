@@ -43,8 +43,6 @@ if (Sys.info()[["nodename"]] == "dell-ff") {
   )
 }
 
-
-
 # Sharepoint path to the butembo project data
 butembo_project_data_path <- fs::path(
   butembo_project_path,
