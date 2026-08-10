@@ -3,7 +3,6 @@
 source(here::here("R", "0_global.R"))
 tmap::tmap_mode("plot")
 
-#* Contact tracing ------------------------------------------
 contact <- readRDS(latest_contact_clean) |>
   filter(sitrep_date >= "2026-06-21")
 
@@ -181,4 +180,66 @@ tmap_save(
   height = 8,
   width = 8,
   dpi = 300
+)
+
+#* CONTACT DATABASE ----------------------------------------------------------------
+
+#load the latest contact database
+db_con <- rio::import(fs::path(
+  butembo_project_data_path,
+  "brute",
+  "contacts",
+  "Butembo",
+  "suivi",
+  "NK_Base Suivi des contacts MVE_BUTEMBO_ 19 JUILLET 2026.xlsx"
+)) |>
+  clean_names() |>
+  as_tibble()
+
+# number of contacts per index case (cas_source)
+contacts_per_index <- db_con |>
+  filter(!is.na(cas_source)) |>
+  count(cas_source, name = "n_contacts")
+
+n_index <- nrow(contacts_per_index)
+mean_contacts <- round(mean(contacts_per_index$n_contacts))
+median_contacts <- round(median(contacts_per_index$n_contacts))
+
+contacts_per_index_hist <- ggplot(contacts_per_index, aes(x = n_contacts)) +
+  geom_histogram(binwidth = 10, fill = "grey40") +
+  scale_x_continuous(
+    breaks = scales::breaks_pretty(),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  scale_y_continuous(
+    breaks = scales::breaks_pretty(),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "Nombre de contacts par cas index à Butembo",
+    subtitle = paste0(
+      "Moyenne : ",
+      mean_contacts,
+      " contacts\n",
+      "Médiane : ",
+      median_contacts,
+      " contacts\n",
+      "La base de suivi comprend ",
+      n_index,
+      " cas index"
+    ),
+    x = "Nombre de contacts par cas index",
+    y = "Nombre de cas index"
+  ) +
+  theme_evd()
+
+contacts_per_index_hist
+
+ggsave(
+  fs::path(out_dir, "butembo_contacts_per_index.png"),
+  contacts_per_index_hist,
+  height = 6,
+  width = 10,
+  dpi = 300,
+  bg = "white"
 )
