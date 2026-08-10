@@ -145,3 +145,27 @@ label_epiweek <- function(x) {
   wk <- aweek::date2week(x, week_start = 1, floor_day = TRUE)
   sub("^\\d{4}-W", "S", as.character(wk))
 }
+
+
+#' Convert Excel Garbage into an Actual Date also turn positx to date
+#'
+#' @description Convert excel date codes into human (and R) readable dates. Also convert POSITx
+#'
+#' @param date `str/num` Date code to be converted
+harmonize_dates <- function(date) {
+  # double check that it wasn't already converted
+  #if (methods::is(date, 'Date')) {
+    #out <- date
+
+  #} else {
+
+  if (methods::is(date, 'POSIXt')) {
+    as.Date(date)
+
+  } else {
+    date |>
+      as.numeric() |>
+      as.Date(origin = '1899-12-30')
+  }
+
+}
