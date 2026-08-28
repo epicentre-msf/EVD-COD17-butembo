@@ -55,3 +55,6 @@ renv.lock
 
 # python venv
 .venv
+
+# agent instructions, kept local
+CLAUDE.md
