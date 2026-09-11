@@ -14,7 +14,7 @@ options(
 #* Import DATA  ------------------------------------------------
 
 # App data
-app_data <- readRDS(fs::path("R", "butembo_dashboard", "data", "app_data.rds"))
+app_data <- readRDS(fs::path("data", "app_data.rds"))
 
 admin_data <- app_data$admin_data
 
@@ -32,7 +32,11 @@ but_ll <- app_data$linelist
 
 #* Geo data ------------------------------------------------
 
+but_ll |>
+  select(contains('adm2'))
+
 but_ll <- but_ll |>
+
   left_join(
     select(adm1_nk, adm1_name, adm1_pcode__onset = adm1_pcode),
     join_by(adm1_name__onset == adm1_name)

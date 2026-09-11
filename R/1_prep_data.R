@@ -120,6 +120,9 @@ ll_narr_clean <- ll_narr |>
       fixed("|"),
       1
     )),
+
+    #! Place of Notification
+
     adm1_name = case_when(
       res_equal_onset == "Yes" ~ adm1_name__res,
       .default = adm1_name__onset
@@ -299,11 +302,12 @@ app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 
 saveRDS(app_data, app_data_path)
 
-# system2(
-#   "rsync",
-#   args = c(
-#     "-zavh",
-#     fs::path_expand(app_data_path),
-#     "episerv:/home/epicentre/EVD_COD17-butembo/data/"
-#   )
-# )
+#* Send data to the server
+system2(
+  "rsync",
+  args = c(
+    "-zavh",
+    fs::path_expand(app_data_path),
+    "episerv:/home/epicentre/EVD_COD17-butembo/dashboard_butembo/data/"
+  )
+)
