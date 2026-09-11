@@ -112,3 +112,9 @@ evd_status_cols <- c(
 )
 
 evd_pal <- unname(evd_status_cols[c("Confirmed", "Probable")])
+
+# https://apps.epicentre-msf.org/testing/
+# docker run --rm -p 5858:3838 \
+#     -v /home/epicentre/EVD-COD17-butembo/R/butembo_dashboard:/root/app \
+#     bvd-app \
+#     R -e "shiny::runApp('/root/app', port = 3838, host = '0.0.0.0')"

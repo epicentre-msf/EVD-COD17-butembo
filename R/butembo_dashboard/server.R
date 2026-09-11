@@ -1,43 +1,43 @@
 # app server
 server <- function(input, output, session) {
   # "Positive cases" tab: confirmed line list, latest notifications first
-  output$summary_table <- DT::renderDT({
-    but_ll_conf |>
-      select(
-        unique_id,
-        isolation_site_id,
-        patient_name,
-        date_notification,
-        date_symptom_onset,
-        type_of_exit
-      ) |>
-      arrange(desc(date_notification)) |>
-      DT::datatable(
-        rownames = FALSE,
-        # "compact" tightens row padding; smaller font fits more rows on screen
-        class = "compact stripe hover row-border",
-        colnames = c(
-          "Epi ID" = "unique_id",
-          "Health structure" = "isolation_site_id",
-          "Name" = "patient_name",
-          "Notification" = "date_notification",
-          "Symptom onset" = "date_symptom_onset",
-          "Outcome" = "type_of_exit"
-        ),
-        filter = "top",
-        options = list(
-          order = list(list(3, "desc")), # default sort: Notification, latest first
-          pageLength = 25,
-          lengthMenu = list(c(25, 50, 100, -1), c("25", "50", "100", "All")),
-          scrollX = TRUE,
-          initComplete = DT::JS(
-            "function(settings, json) {",
-            "  $(this.api().table().container()).css({'font-size': '0.8em'});",
-            "}"
-          )
-        )
-      )
-  })
+  # output$summary_table <- DT::renderDT({
+  #   but_ll_conf |>
+  #     select(
+  #       unique_id,
+  #       isolation_site_id,
+  #       patient_name,
+  #       date_notification,
+  #       date_symptom_onset,
+  #       type_of_exit
+  #     ) |>
+  #     arrange(desc(date_notification)) |>
+  #     DT::datatable(
+  #       rownames = FALSE,
+  #       # "compact" tightens row padding; smaller font fits more rows on screen
+  #       class = "compact stripe hover row-border",
+  #       colnames = c(
+  #         "Epi ID" = "unique_id",
+  #         "Health structure" = "isolation_site_id",
+  #         "Name" = "patient_name",
+  #         "Notification" = "date_notification",
+  #         "Symptom onset" = "date_symptom_onset",
+  #         "Outcome" = "type_of_exit"
+  #       ),
+  #       filter = "top",
+  #       options = list(
+  #         order = list(list(3, "desc")), # default sort: Notification, latest first
+  #         pageLength = 25,
+  #         lengthMenu = list(c(25, 50, 100, -1), c("25", "50", "100", "All")),
+  #         scrollX = TRUE,
+  #         initComplete = DT::JS(
+  #           "function(settings, json) {",
+  #           "  $(this.api().table().container()).css({'font-size': '0.8em'});",
+  #           "}"
+  #         )
+  #       )
+  #     )
+  # })
   # the sidebar owns the data: every module below plots filter_data$df, and
   # map / bar clicks feed back as extra filter chips. bar_click and map_click are
   # forward references - epishiny only forces them inside reactive contexts.
