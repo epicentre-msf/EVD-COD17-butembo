@@ -308,6 +308,6 @@ system2(
   args = c(
     "-zavh",
     fs::path_expand(app_data_path),
-    "episerv:/home/epicentre/EVD_COD17-butembo/dashboard_butembo/data/"
+    "episerv:/home/epicentre/EVD_COD17-butembo/R/dashboard_butembo/data/"
   )
 )
