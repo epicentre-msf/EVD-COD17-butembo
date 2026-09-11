@@ -3,7 +3,7 @@
 source(here::here("R", "0_global.R"))
 library(tidyverse)
 
-ll <- readRDS(latest_narr_ll_clean)$data
+ll <- readRDS(latest_narr_ll_clean)
 
 trans_dat <- readRDS(latest_transmission_clean)
 
@@ -172,7 +172,7 @@ butembo_si_hist <- ggplot() +
 butembo_si_hist
 
 ggsave(
-  fs::path(out_dir, "butembo_serial_interval.png"),
+  fs::path(plots_dir, "butembo_serial_interval.png"),
   butembo_si_hist,
   height = 6,
   width = 9,
@@ -325,7 +325,7 @@ butembo_inc_hist <- ggplot() +
 butembo_inc_hist
 
 ggsave(
-  fs::path(out_dir, "butembo_incubation_period.png"),
+  fs::path(plots_dir, "butembo_incubation_period.png"),
   butembo_inc_hist,
   height = 6,
   width = 9,

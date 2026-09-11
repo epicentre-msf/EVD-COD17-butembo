@@ -105,7 +105,7 @@ contact_hz_ts <- ggplot() +
 contact_hz_ts
 
 ggsave(
-  fs::path(out_dir, "butembo_contacts_by_hz_time.png"),
+  fs::path(plots_dir, "butembo_contacts_by_hz_time.png"),
   contact_hz_ts,
   height = 10,
   width = 8,
@@ -176,7 +176,7 @@ tm_nk_choro <- tm_basemap_epi() +
 
 tmap_save(
   tm_nk_choro,
-  fs::path(out_dir, "butembo_map_contact.png"),
+  fs::path(plots_dir, "butembo_map_contact.png"),
   height = 8,
   width = 8,
   dpi = 300
@@ -236,7 +236,7 @@ contacts_per_index_hist <- ggplot(contacts_per_index, aes(x = n_contacts)) +
 contacts_per_index_hist
 
 ggsave(
-  fs::path(out_dir, "butembo_contacts_per_index.png"),
+  fs::path(plots_dir, "butembo_contacts_per_index.png"),
   contacts_per_index_hist,
   height = 6,
   width = 10,

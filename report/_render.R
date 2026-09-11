@@ -3,8 +3,8 @@
 setwd(here::here())
 
 # --- 1. Regenerate outputs --------------------------------------------------
-# 0_butembo_prep_data.R refreshes the cleaned positives rds from SharePoint;
-# the plotting scripts then read it and write PNGs to output/butembo/.
+# 1_prep_data.R refreshes the clean rds from SharePoint; the plotting scripts
+# then read it and write PNGs to output/plots/ and output/tables/.
 scripts <- c(
   "1_prep_data.R", # must run first: prepares the clean data
   "2_overview.R", # pos_summary, active isolation
@@ -25,9 +25,8 @@ for (s in scripts) {
 }
 
 # --- 2. Data cut-off date ---------------------------------------------------
-# Modification time of the source positives summary = when the data were last
-# refreshed. Passed to the report so the title page can stamp it.
-date_updated <- butembo_pos$date_updated # source-file modification date (Date)
+# read off the clean export just written, and stamped on the title page
+date_updated <- clean_file_date(latest_narr_ll_clean)
 
 # --- 3. Render the .docx ----------------------------------------------------
 message("\n>>> Rendering butembo-report.docx (cut-off ", date_updated, ")")

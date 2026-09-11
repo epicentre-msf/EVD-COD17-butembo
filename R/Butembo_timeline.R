@@ -5,7 +5,7 @@
 source(here::here("R", "0_global.R"))
 library(highcharter)
 
-ll <- readRDS(latest_narr_ll_clean)$data
+ll <- readRDS(latest_narr_ll_clean)
 
 # disease phase: same light red for every case
 disease_col <- "#f2b0b0"
@@ -21,7 +21,7 @@ tl_dat <- ll |>
   ) |>
   slice_sample(n = 8) |>
   mutate(
-    sex_age = paste0(if_else(sex == "Homme", "M", "F"), age),
+    sex_age = paste0(if_else(sex == "Male", "M", "F"), age),
     patient_label = glue::glue("{patient_name} ({sex_age})"),
     patient_label = forcats::fct_reorder(patient_label, date_symptom_onset),
     # each day fills the cell between two grid lines, so span to the next midnight

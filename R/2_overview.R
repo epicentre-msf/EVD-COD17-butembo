@@ -1,12 +1,11 @@
 # Overview of the situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #? 1. Statut des cas par zone de santé ---------------------------------------------------
-# Effectif, nouveaux cas récents et statut (Actif / Guéri / Abandon / Décédé)
+# Effectif, nouveaux cas récents et statut (Inconnu / Guéri / Abandon / Décédé)
 # par zone de santé, présentés en reactable.
 
 case_ramp <- c("#ffffff", "#fd7e14")
@@ -24,19 +23,15 @@ ramp_style <- function(ramp, domain) {
 
 # fenêtres de nouveaux cas (notification), cumulatives et ancrées sur la date
 # du rapport : 7j inclus dans 14j inclus dans 21j
-status_levels <- c("Actif", "Guéri", "Abandon", "Décédé")
+# un type_of_exit non renseigné n'est pas un cas actif, il est inconnu
+status_levels <- c("Inconnu", "Guéri", "Abandon", "Décédé")
 n_since <- function(d, n) {
   sum(d >= date_report - (n - 1) & d <= date_report, na.rm = TRUE)
 }
 
 positives_summary <- pos_data_clean |>
   mutate(
-    zone = forcats::fct_relevel(
-      adm2_comptabilisation,
-      "Butembo",
-      "Katwa",
-      "Musienene"
-    ),
+    zone = forcats::fct_relevel(adm2_comptabilisation, CONFIG$filter_hz),
     date_notification = as.Date(date_notification),
     type_of_exit = as.character(type_of_exit)
   ) |>
@@ -46,7 +41,7 @@ positives_summary <- pos_data_clean |>
     j7 = n_since(date_notification, 7),
     j14 = n_since(date_notification, 14),
     j21 = n_since(date_notification, 21),
-    Actif = sum(type_of_exit == "Actif", na.rm = TRUE),
+    Inconnu = sum(is.na(type_of_exit)),
     Guéri = sum(type_of_exit == "Guéri", na.rm = TRUE),
     Abandon = sum(type_of_exit == "Abandon", na.rm = TRUE),
     Décédé = sum(type_of_exit == "Décédé", na.rm = TRUE)
@@ -113,7 +108,7 @@ status_reactable <- reactable::reactable(
   columns = list(
     zone = zone_col,
     total = count_col("total", "Total", c(0, max(positives_summary$total))),
-    Actif = count_col("Actif", "Actif", dom_status),
+    Inconnu = count_col("Inconnu", "Inconnu", dom_status),
     Guéri = count_col("Guéri", "Guéri", dom_status),
     Abandon = count_col("Abandon", "Abandon", dom_status),
     Décédé = count_col("Décédé", "Décédé", dom_status)
@@ -151,8 +146,9 @@ positives_panel |>
 
 #? 2. Cas actifs par lieu d'isolement ---------------------------------------------------
 
+# actif = aucune sortie enregistrée ; le nettoyage ne code plus "Actif"
 active_iso <- pos_data_clean |>
-  filter(type_of_exit == "Actif") |>
+  filter(is.na(type_of_exit)) |>
   count(adm2_isolation, isolation_site_id, name = "n_actif") |>
   mutate(across(
     c(adm2_isolation, isolation_site_id),
@@ -217,9 +213,9 @@ active_iso_gt |>
 
 #? 3. Cas par zone de santé (adm2) et aire de santé (adm3) ---------------------
 # Distribution géographique par résidence. Les cas résidant hors des zones de
-# santé suivies (Butembo, Katwa, Musienene) sont regroupés en "Hors-zone".
+# santé suivies sont regroupés en "Hors-zone".
 
-local_hz <- c("Butembo", "Katwa", "Musienene")
+local_hz <- CONFIG$filter_hz
 
 # classification par résidence, réutilisée pour les effectifs et la répartition
 place_base <- pos_data_clean |>
@@ -275,7 +271,7 @@ cases_by_place <- place_base |>
     date_last_onset = max(date_symptom_onset, na.rm = TRUE),
     date_last_notif = max(date_notification, na.rm = TRUE)
   ) |>
-  # une colonne d'effectif par statut d'infection (Incertaine / Importée / Locale)
+  # une colonne d'effectif par statut d'infection (Unknown / Imported / Local)
   left_join(
     place_base |>
       count(adm2_grp, adm3_grp, infection_butembo) |>
@@ -296,7 +292,7 @@ cases_by_place <- place_base |>
     by = join_by("adm2_grp" == "adm2_name", "adm3_grp" == "adm3_name")
   ) |>
   mutate(contact_to_follow = tidyr::replace_na(contact_to_follow, 0)) |>
-  relocate(all_of(c("Locale", "Importée", "Incertaine")), .after = n_case) |>
+  relocate(all_of(c("Local", "Imported", "Unknown")), .after = n_case) |>
   relocate(date_last_onset, .after = last_col()) |>
   relocate(date_last_notif, .after = last_col()) |>
   relocate(date_last_contact, .after = last_col()) |>
@@ -310,7 +306,7 @@ cases_by_place <- place_base |>
 local_place <- cases_by_place |>
   filter(adm2_grp %in% local_hz)
 dom_case <- range(local_place$n_case, na.rm = TRUE)
-dom_locale <- range(local_place$Locale, na.rm = TRUE)
+dom_locale <- range(local_place$Local, na.rm = TRUE)
 dom_contact <- range(local_place$contact_to_follow, na.rm = TRUE)
 
 # répartition d'origine (footnote) : les hors-zone / inconnu ne sont pas
@@ -340,8 +336,10 @@ place_footnote <- paste0(
 
 # construit un tableau par zone de santé ; `colored = FALSE` pour "Autres"
 place_gt <- function(dat, title, colored = TRUE) {
-  # dernier point de situation propre à la zone (alertes / contacts)
-  date_zone <- max(dat$date_last_contact, na.rm = TRUE)
+  # dernier point de situation propre à la zone (alertes / contacts) ; une zone
+  # sans sitrep n'en a aucun, d'où le garde-fou
+  date_zone <- suppressWarnings(max(dat$date_last_contact, na.rm = TRUE))
+  date_zone_lab <- if (is.finite(date_zone)) fr_date(date_zone) else "—"
   g <- dat |>
     select(-adm2_grp, -date_last_contact) |>
     gt::gt(rowname_col = "adm3_grp") |>
@@ -349,9 +347,12 @@ place_gt <- function(dat, title, colored = TRUE) {
     gt::tab_stubhead(label = "Aire de santé") |>
     gt::tab_spanner(
       label = "Infection",
-      columns = c("Incertaine", "Importée", "Locale")
+      columns = c("Unknown", "Imported", "Local")
     ) |>
     gt::cols_label(
+      Unknown = "Inconnue",
+      Imported = "Importée",
+      Local = "Locale",
       n_case = "N cas",
       n_alert = "Alertes",
       contact_to_follow = "Contacts à suivre",
@@ -374,10 +375,7 @@ place_gt <- function(dat, title, colored = TRUE) {
       gt::md(paste0("Données au ", fr_date(date_report)))
     ) |>
     gt::tab_source_note(
-      gt::md(paste0(
-        "Alertes et contacts : données au ",
-        fr_date(date_zone)
-      ))
+      gt::md(paste0("Alertes et contacts : données au ", date_zone_lab))
     ) |>
     gt::tab_source_note(
       gt::md(paste0(
@@ -395,7 +393,7 @@ place_gt <- function(dat, title, colored = TRUE) {
         domain = dom_case
       ) |>
       gt::data_color(
-        columns = Locale,
+        columns = Local,
         palette = c("#e5f5e0", "#00441b"),
         domain = dom_locale
       ) |>
@@ -415,18 +413,18 @@ place_gt <- function(dat, title, colored = TRUE) {
   g
 }
 
-gt_butembo <- place_gt(filter(cases_by_place, adm2_grp == "Butembo"), "Butembo")
-gt_katwa <- place_gt(filter(cases_by_place, adm2_grp == "Katwa"), "Katwa")
-gt_musienene <- place_gt(
-  filter(cases_by_place, adm2_grp == "Musienene"),
-  "Musienene"
-)
+place_gts <- CONFIG$filter_hz |>
+  purrr::set_names() |>
+  # une zone sans cas notifié n'a pas de table
+  purrr::keep(\(zone) any(cases_by_place$adm2_grp == zone)) |>
+  purrr::map(\(zone) place_gt(filter(cases_by_place, adm2_grp == zone), zone))
 
 # aperçu avant sauvegarde
-gt_butembo
-gt_katwa
-gt_musienene
+place_gts
 
-gt_butembo |> save_gt("butembo_cases_by_place_butembo.png")
-gt_katwa |> save_gt("butembo_cases_by_place_katwa.png")
-gt_musienene |> save_gt("butembo_cases_by_place_musienene.png")
+purrr::iwalk(
+  place_gts,
+  \(g, zone) {
+    save_gt(g, glue::glue("butembo_cases_by_place_{str_to_lower(zone)}.png"))
+  }
+)

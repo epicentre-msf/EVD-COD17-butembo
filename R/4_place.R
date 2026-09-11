@@ -1,9 +1,8 @@
 # ! Script of the PLACE situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* PLACE (geographic distribution) ------------------------------------------
 
@@ -60,7 +59,7 @@ tm_butembo_ref <- tm_basemap_epi() +
 
 tmap_save(
   tm_butembo_ref,
-  fs::path(out_dir, "butembo_map_reference.png"),
+  fs::path(plots_dir, "butembo_map_reference.png"),
   height = 8,
   width = 8,
   dpi = 300
@@ -129,7 +128,7 @@ tm_butembo_conf <- tm_basemap_epi() +
 
 tmap_save(
   tm_butembo_conf,
-  fs::path(out_dir, "butembo_map_confirmed_reporting.png"),
+  fs::path(plots_dir, "butembo_map_confirmed_reporting.png"),
   height = 8,
   width = 8,
   dpi = 300
@@ -176,7 +175,7 @@ tm_butembo_res <- tm_basemap_epi() +
 
 tmap_save(
   tm_butembo_res,
-  fs::path(out_dir, "butembo_map_cases_residence.png"),
+  fs::path(plots_dir, "butembo_map_cases_residence.png"),
   height = 8,
   width = 8,
   dpi = 300
@@ -185,12 +184,10 @@ tmap_save(
 #? 3. Choroplèthe — délai début des symptômes → notification par aire de santé ----
 
 # délai médian (jours) début des symptômes → notification par aire de santé
+# delay_ons_not is computed once, in 1_prep_data.R
 delay_sf <- adm3 |>
   left_join(
     pos_data_clean |>
-      mutate(
-        delay_ons_not = as.numeric(date_notification - date_symptom_onset)
-      ) |>
       filter(!is.na(delay_ons_not)) |>
       summarise(
         delay_med = median(delay_ons_not),
@@ -202,9 +199,7 @@ delay_sf <- adm3 |>
   select(adm3_name, delay_med, n_delay)
 
 # part des cas avec un délai début des symptômes → notification calculable
-n_delay_valid <- sum(
-  !is.na(pos_data_clean$date_notification - pos_data_clean$date_symptom_onset)
-)
+n_delay_valid <- sum(!is.na(pos_data_clean$delay_ons_not))
 pct_delay <- round(100 * n_delay_valid / n_total)
 
 delay_caption <- glue::glue(
@@ -257,7 +252,7 @@ tm_butembo_delay <- tm_basemap_epi() +
 
 tmap_save(
   tm_butembo_delay,
-  fs::path(out_dir, "butembo_map_delay_notification.png"),
+  fs::path(plots_dir, "butembo_map_delay_notification.png"),
   height = 8,
   width = 8,
   dpi = 300

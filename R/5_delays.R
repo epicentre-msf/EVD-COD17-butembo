@@ -1,46 +1,32 @@
 # ! Script of the DELAYS situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* DELAYS -------------------------------------------------------------
-# onset -> notification (all cases), onset -> death (décès), onset -> cure (guéris)
+# onset -> notification, death and cure: computed once, in 1_prep_data.R
 delays <- pos_data_clean |>
   select(
-    date_symptom_onset,
-    date_notification,
-    date_exit_eff,
-    type_of_exit
-  ) |>
-  mutate(
-    delay_ons_not = as.numeric(date_notification - date_symptom_onset),
-    delay_ons_death = if_else(
-      type_of_exit == "Décédé",
-      as.numeric(date_exit_eff - date_symptom_onset),
-      NA_real_
-    ),
-    delay_ons_cure = if_else(
-      type_of_exit == "Guéri",
-      as.numeric(date_exit_eff - date_symptom_onset),
-      NA_real_
-    )
+    type_of_exit,
+    delay_ons_not,
+    delay_ons_death,
+    delay_ons_cure
   )
 
 # case counts for the completeness captions
 n_all_total <- nrow(delays)
-n_death_total <- sum(delays$type_of_exit == "Décédé", na.rm = TRUE)
-n_cure_total <- sum(delays$type_of_exit == "Guéri", na.rm = TRUE)
+n_death_total <- sum(delays$type_of_exit == "Died", na.rm = TRUE)
+n_cure_total <- sum(delays$type_of_exit == "Recovered", na.rm = TRUE)
 
 n_notif_valid <- sum(!is.na(delays$delay_ons_not))
 n_death_valid <- sum(!is.na(delays$delay_ons_death))
 n_cure_valid <- sum(!is.na(delays$delay_ons_cure))
 n_notif_death_valid <- sum(
-  delays$type_of_exit == "Décédé" & !is.na(delays$delay_ons_not)
+  delays$type_of_exit == "Died" & !is.na(delays$delay_ons_not)
 )
 n_notif_cure_valid <- sum(
-  delays$type_of_exit == "Guéri" & !is.na(delays$delay_ons_not)
+  delays$type_of_exit == "Recovered" & !is.na(delays$delay_ons_not)
 )
 
 # labels and display order
@@ -76,7 +62,7 @@ delays_long <- delays |>
 #* MLE fit of the onset -> death delay --------------------------------
 # gamma fit (fitdistrplus, MLE)
 death_delays <- delays |>
-  filter(type_of_exit == "Décédé", !is.na(delay_ons_death)) |>
+  filter(type_of_exit == "Died", !is.na(delay_ons_death)) |>
   pull(delay_ons_death)
 
 # fitdistrplus needs positive values; nudge same-day deaths to 0.5
@@ -172,7 +158,7 @@ butembo_delay_death_fit <- tibble::tibble(delay = death_delays_fit) |>
 butembo_delay_death_fit
 
 ggsave(
-  fs::path(out_dir, "butembo_delay_death_gamma_fit.png"),
+  fs::path(plots_dir, "butembo_delay_death_gamma_fit.png"),
   butembo_delay_death_fit,
   height = 6,
   width = 8,
@@ -200,15 +186,7 @@ delay_fits <- tibble::tibble(
   date_updated = date_report
 )
 
-file_base <- glue::glue("BUT-EVD_BUTEMBO_delay-fits__{time_stamp()}")
-
-saveRDS(
-  delay_fits,
-  fs::path(
-    butembo_project_clean_data_path,
-    paste0(file_base, ".rds")
-  )
-)
+export_clean(delay_fits, "delay-fits", time_stamp())
 
 #* Boxplot + jitter of delays -----------------------------------------
 butembo_delays_box <- delays_long |>
@@ -281,8 +259,15 @@ outcome_cols <- c(
 )
 
 notif_by_outcome <- delays |>
-  filter(type_of_exit %in% c("Décédé", "Guéri"), !is.na(delay_ons_not)) |>
-  mutate(outcome = factor(type_of_exit, levels = c("Décédé", "Guéri")))
+  filter(type_of_exit %in% c("Died", "Recovered"), !is.na(delay_ons_not)) |>
+  # French levels for display; type_of_exit itself is English post-recode
+  mutate(
+    outcome = factor(
+      type_of_exit,
+      levels = c("Died", "Recovered"),
+      labels = c("Décédé", "Guéri")
+    )
+  )
 
 butembo_delay_notif_outcome <- notif_by_outcome |>
   ggplot(aes(
@@ -357,7 +342,7 @@ butembo_delays_combined <- (butembo_delays_box / butembo_delay_notif_outcome) +
 butembo_delays_combined
 
 ggsave(
-  fs::path(out_dir, "butembo_delays_combined.png"),
+  fs::path(plots_dir, "butembo_delays_combined.png"),
   butembo_delays_combined,
   height = 11,
   width = 8,

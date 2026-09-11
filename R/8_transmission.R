@@ -1,9 +1,8 @@
 # ! Script of the TRANSMISSION situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 n_total <- nrow(pos_data_clean)
 
@@ -46,7 +45,7 @@ trans_dat <- pos_data_clean |>
 # Transmission types among LOCAL infections (% of local cases),
 # with "Incertaine" and "Inconnu" bundled together
 local_type_tbl <- trans_dat |>
-  filter(infection_butembo == "Locale") |>
+  filter(infection_butembo == "Local") |>
   mutate(
     niveau = as.character(transmission_type_1),
     niveau = if_else(is.na(niveau), "Inconnu", niveau),
@@ -112,8 +111,8 @@ overview_gt |>
 
 #* 3. Age & sex — nosocomial vs all other transmission ----------------
 sex_cols <- c(
-  "Homme" = "#5d8f76", # muted teal
-  "Femme" = "#d0b13f" # gold
+  "Male" = "#5d8f76", # muted teal
+  "Female" = "#d0b13f" # gold
 )
 
 pyr_data <- trans_dat |>
@@ -128,7 +127,7 @@ pyr_data <- trans_dat |>
   ) |>
   count(groupe, age_group, sex, .drop = FALSE) |>
   tidyr::complete(groupe, age_group, sex, fill = list(n = 0)) |>
-  mutate(n_signed = if_else(sex == "Homme", -n, n))
+  mutate(n_signed = if_else(sex == "Male", -n, n))
 
 x_max <- max(2, ceiling(max(pyr_data$n) / 2) * 2)
 
@@ -171,7 +170,7 @@ butembo_noso_pyramid <- pyr_data |>
 butembo_noso_pyramid
 
 ggsave(
-  fs::path(out_dir, "butembo_nosocomial_age_sex.png"),
+  fs::path(plots_dir, "butembo_nosocomial_age_sex.png"),
   butembo_noso_pyramid,
   height = 6,
   width = 8,

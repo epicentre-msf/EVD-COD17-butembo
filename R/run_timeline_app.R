@@ -8,13 +8,12 @@ source(here::here("R", "0_global.R"))
 
 library(epishiny.timeline)
 
-ll <- readRDS(latest_narr_ll_clean)$data
+ll <- readRDS(latest_narr_ll_clean)
 
 # `...` go to timeline_server(): id_var stays the join key, name_var / pid_var
 # feed the "Identifiant" picker. All structures + all cases show by default.
-# Every timeline_server() argument is set explicitly below. Note the package
-# defaults to English outcome labels, so the French values used in this linelist
-# ("Guéri" / "Décédé" / "Homme") are passed in.
+# Every timeline_server() argument is set explicitly below. type_of_exit is not
+# translated by the cleaner, so its French values are passed in.
 launch_timeline(
   ll,
   id_var = "patient_name",

@@ -1,9 +1,8 @@
 # ! Script of the ALERT situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* Alerts -------------------------------------------------------
 
@@ -87,7 +86,7 @@ alert_hz_ts <- alert_adm2 |>
 alert_hz_ts
 
 ggsave(
-  fs::path(out_dir, "butembo_alerts_by_hz_time.png"),
+  fs::path(plots_dir, "butembo_alerts_by_hz_time.png"),
   alert_hz_ts,
   height = 7,
   width = 9,
@@ -139,7 +138,7 @@ tm_nk_alerts <- tm_basemap_epi() +
 
 tmap_save(
   tm_nk_alerts,
-  fs::path(out_dir, "butembo_map_alerts.png"),
+  fs::path(plots_dir, "butembo_map_alerts.png"),
   height = 8,
   width = 8,
   dpi = 300

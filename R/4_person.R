@@ -1,9 +1,8 @@
 # ! Script of the PERSON situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* PERSON (Age & sex pyramid) ------------------------------------------
 
@@ -22,7 +21,7 @@ pyr_data <- pos_data_clean |>
     fill = list(n = 0)
   ) |>
   mutate(
-    n_signed = if_else(sex == "Homme", -n, n),
+    n_signed = if_else(sex == "Male", -n, n),
     mid = n_signed / 2,
     y = as.integer(age_group)
   )
@@ -31,8 +30,8 @@ pyr_data <- pos_data_clean |>
 x_max <- max(2, ceiling(max(pyr_data$n) / 2) * 2)
 
 sex_cols <- c(
-  "Homme" = "#5d8f76", # muted teal
-  "Femme" = "#d0b13f" # turquoise
+  "Male" = "#5d8f76", # muted teal
+  "Female" = "#d0b13f" # turquoise
 )
 
 nk_pyramid <- pyr_data |>
@@ -90,7 +89,7 @@ nk_pyramid <- pyr_data |>
 nk_pyramid
 
 ggsave(
-  fs::path(out_dir, "butembo_age_pyramid.png"),
+  fs::path(plots_dir, "butembo_age_pyramid.png"),
   nk_pyramid,
   height = 6,
   width = 9,

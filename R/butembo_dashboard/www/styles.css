@@ -1,0 +1,97 @@
+/* Value-box styling lifted from evd-2026-app/www/styles.css, trimmed to the
+   rules the three dashboard boxes in R/mod_vb.R actually use. */
+
+/* Value boxes: tighten layout to fit a single 85px-tall row */
+.bslib-value-box .value-box-area {
+  padding: 0.5rem 0.75rem !important;
+}
+.bslib-value-box .value-box-title {
+  margin-bottom: 0.1rem !important;
+  font-size: 0.88rem;
+  color: #6c757d;
+}
+.bslib-value-box .value-box-value {
+  margin-bottom: 0.1rem !important;
+  font-size: 1.65rem;
+  line-height: 1.15;
+  font-weight: 600;
+}
+.bslib-value-box p {
+  margin-bottom: 0 !important;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  color: #495057;
+  container-type: inline-size;
+}
+.bslib-value-box .value-box-showcase {
+  padding: 0.5rem !important;
+}
+
+/* Stat line under each box: muted label, bold value, with the label shortened
+   in three tiers (full -> medium -> short) as the box's own width shrinks.
+   Container query is on the enclosing .bslib-value-box p (set above), since
+   .vb-breakdown itself is inline and has no definite size to query. */
+.vb-breakdown {
+  white-space: nowrap;
+}
+.vb-stat-label {
+  color: #6c757d;
+  margin-right: 0.15em;
+}
+.vb-stat-value {
+  font-weight: 600;
+  color: #212529;
+  font-variant-numeric: tabular-nums;
+}
+.vb-stat:not(:first-child)::before {
+  content: " | ";
+  color: #adb5bd;
+}
+
+.vb-stat-label .lbl-full,
+.vb-stat-label .lbl-med {
+  display: none;
+}
+.vb-stat-label .lbl-short {
+  display: inline;
+}
+@container (min-width: 205px) {
+  .vb-stat-label .lbl-short { display: none; }
+  .vb-stat-label .lbl-med { display: inline; }
+}
+@container (min-width: 300px) {
+  .vb-stat-label .lbl-med { display: none; }
+  .vb-stat-label .lbl-full { display: inline; }
+}
+
+/* The Confirmed box's tooltip only explains the short P./S. acronyms, so it
+   goes once the labels are spelled out. Query container is .value-box-area,
+   whose inline size matches the breakdown <p> above. */
+.value-box-area {
+  container-type: inline-size;
+}
+.vb-tooltip,
+.vb-status-tooltip {
+  display: inline-flex;
+  align-items: center;
+}
+@container (min-width: 205px) {
+  .vb-status-tooltip { display: none; }
+}
+
+/* White card with a coloured left accent stripe per semantic class */
+.vb-accent {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  border-radius: 4px;
+}
+.vb-accent .value-box-area,
+.vb-accent .value-box-showcase {
+  background-color: #ffffff !important;
+  color: inherit !important;
+}
+
+.vb-danger  { border-left: 6px solid var(--bs-danger) !important; }
+.vb-success { border-left: 6px solid #146c43           !important; }
+/* mirrors evd_status_cols["Confirmed"] in global.R - keep the two in sync */
+.vb-confirmed { border-left: 6px solid #9e2a2b !important; }

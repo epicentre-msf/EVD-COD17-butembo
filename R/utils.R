@@ -1,5 +1,92 @@
 # utils
 
+#* EXPORTING ------------------------------
+
+# the dir_ls regexps in 0_global.R match on this
+export_prefix <- "BUT-EVD_BUTEMBO"
+
+# stamp is passed in, so every dataset of one run carries the same one.
+# dir is created first: on synced storage it may not be there yet
+export_clean <- function(x, name, stamp, dir = butembo_project_clean_data_path) {
+  fs::dir_create(dir)
+  saveRDS(
+    x,
+    fs::path(dir, glue::glue("{export_prefix}_{name}__{stamp}.rds"))
+  )
+}
+
+# validity date read off the filename, so no analysis script touches SharePoint
+clean_file_date <- function(path) {
+  as.Date(stringr::str_extract(path, "\\d{8}(?=\\.rds$)"), format = "%Y%m%d")
+}
+
+# read-back counterpart to export_clean(): newest export of one dataset, picked
+# on the stamp rather than a string sort. "BUT-EVD_BUTEMBO_..." sorts below a
+# legacy "BUTEMBO_..." name, so max() on the path returns the older file
+latest_clean <- function(name, dir = butembo_project_clean_data_path) {
+  paths <- fs::dir_ls(
+    dir,
+    regexp = glue::glue("{export_prefix}_{name}__\\d{{8}}\\.rds$")
+  )
+
+  if (!length(paths)) {
+    cli::cli_abort("No {name} export in {dir} - run R/1_prep_data.R first")
+  }
+
+  paths[which.max(clean_file_date(paths))]
+}
+
+#* LOCAL CACHE ------------------------------
+
+# adm files change rarely; prefer the local copy 1_prep_data.R writes and
+# only fall back to SharePoint (sharepoint_dir) when no cache exists yet
+read_geo_cached <- function(file, local_dir = local_geobase_dir, sharepoint_dir = sf_data_path) {
+  local_path <- fs::path(local_dir, file)
+  if (fs::file_exists(local_path)) {
+    readRDS(local_path)
+  } else {
+    readRDS(fs::path(sharepoint_dir, file))
+  }
+}
+
+# latest_clean() counterpart for the linelist: prefer the local_ll_dir copy
+# 1_prep_data.R writes, only falling back to SharePoint if none exists yet
+latest_clean_cached <- function(name, local_dir = local_ll_dir) {
+  tryCatch(
+    latest_clean(name, dir = local_dir),
+    error = function(e) latest_clean(name, dir = butembo_project_clean_data_path)
+  )
+}
+
+#* AGE ------------------------------
+
+# unit is Ans, Mois or Jour, NA meaning Ans. French Excel writes the decimal
+# separator as a comma; fixed() because "." as a regex matches everything
+age_years <- function(age, age_unit) {
+  age <- as.numeric(str_replace(as.character(age), fixed(","), "."))
+  floor(case_when(
+    age_unit == "Mois" ~ age / 12,
+    age_unit == "Jour" ~ age / 365.25,
+    .default = age
+  ))
+}
+
+#* GEO ------------------------------
+
+# harmonise les noms d'aires de santé (adm3) des sitreps sur ceux du fond de carte
+clean_adm3 <- function(x) {
+  x <- str_to_sentence(str_squish(x))
+  case_when(
+    str_detect(x, regex("musayi", ignore_case = TRUE)) ~ "Maman Musayi",
+    x %in% c("Wanama", "Wanamahi") ~ "Wanamahika",
+    x == "Monde" ~ "Mondo",
+    x %in% c("Kangike", "Yangike") ~ "Kyangike",
+    # Misebere : nouvelle aire de santé rattachée à Kambuli
+    x == "Misebere" ~ "Kambuli",
+    .default = x
+  )
+}
+
 # Format a date as the French validity label used in table/map footers,
 # e.g. fr_date(as.Date("2026-06-23")) -> "23/06/2026".
 fr_date <- function(date) {
@@ -23,7 +110,7 @@ zone_last_dates <- function(
   out[order(names(out))]
 }
 
-# Save a gt table to out_dir as a high-resolution PNG.
+# Save a gt table to tables_dir as a high-resolution PNG.
 # gtsave crops tight to the table, so width follows the table's own content;
 # zoom is the resolution multiplier (higher = crisper, larger file).
 # font_size sets a consistent (small) text size across all tables.
@@ -33,8 +120,8 @@ zone_last_dates <- function(
 # need for hand-tuned out-width per table and the inconsistent apparent scale.
 # We rewrite the real resolution (72 * zoom) so the physical size is correct and
 # all tables render at one consistent text scale without per-chunk out-width.
-save_gt <- function(gt_tbl, file, zoom = 3, font_size = 11) {
-  path <- fs::path(out_dir, file)
+save_gt <- function(gt_tbl, file, zoom = 3, font_size = 11, dir = tables_dir) {
+  path <- fs::path(dir, file)
   gt_tbl |>
     gt::tab_options(table.font.size = gt::px(font_size)) |>
     gt::gtsave(
@@ -47,12 +134,18 @@ save_gt <- function(gt_tbl, file, zoom = 3, font_size = 11) {
 }
 
 # Save an htmlwidget or htmltools tag (e.g. a reactable or a div wrapping
-# several) to out_dir as a PNG via headless Chrome. selector crops tight to the
+# several) to tables_dir as a PNG via headless Chrome. selector crops tight to
 # target; zoom / dpi rewrite mirror save_gt() so tables render at one consistent
 # physical scale in Word. save_html() keeps the lib/ sidecar in a temp dir,
 # avoiding the pandoc dependency of a self-contained file.
-save_widget <- function(widget, file, selector = ".reactable", zoom = 3) {
-  path <- fs::path(out_dir, file)
+save_widget <- function(
+  widget,
+  file,
+  selector = ".reactable",
+  zoom = 3,
+  dir = tables_dir
+) {
+  path <- fs::path(dir, file)
   html <- fs::path(fs::file_temp(), "widget.html")
   fs::dir_create(fs::path_dir(html))
   htmltools::save_html(widget, html)
@@ -153,19 +246,24 @@ label_epiweek <- function(x) {
 #'
 #' @param date `str/num` Date code to be converted
 harmonize_dates <- function(date) {
-  # double check that it wasn't already converted
-  #if (methods::is(date, 'Date')) {
-    #out <- date
-
-  #} else {
-
-  if (methods::is(date, 'POSIXt')) {
+  # a Date through the numeric branch is read as an 1899 serial, a century out
+  if (methods::is(date, "Date")) {
+    date
+  } else if (methods::is(date, "POSIXt")) {
     as.Date(date)
-
+  } else if (is.numeric(date)) {
+    as.Date(date, origin = "1899-12-30")
   } else {
-    date |>
-      as.numeric() |>
-      as.Date(origin = '1899-12-30')
+    # an Excel serial stored as text, otherwise a written-out date
+    serial <- suppressWarnings(as.numeric(date))
+    dplyr::if_else(
+      is.na(serial),
+      lubridate::as_date(lubridate::parse_date_time(
+        date,
+        orders = c("ymd", "dmy"),
+        quiet = TRUE
+      )),
+      as.Date(serial, origin = "1899-12-30")
+    )
   }
-
 }

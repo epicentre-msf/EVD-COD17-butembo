@@ -1,9 +1,8 @@
 # ! Script of the patient HF travels (parcours de soins avant isolement)
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 # one row per recorded HF visit
 hf_visits <- pos_data_clean |>
@@ -132,7 +131,7 @@ butembo_hf_dist <- dist_data |>
 butembo_hf_dist
 
 ggsave(
-  fs::path(out_dir, "butembo_hf_visits_distribution.png"),
+  fs::path(plots_dir, "butembo_hf_visits_distribution.png"),
   butembo_hf_dist,
   height = 8,
   width = 7,
@@ -358,7 +357,7 @@ hf_map <- tm_basemap_epi() +
   )
 tmap_save(
   hf_map,
-  fs::path(out_dir, "butembo_hf_map.png"),
+  fs::path(plots_dir, "butembo_hf_map.png"),
   height = 8,
   width = 8,
   dpi = 300

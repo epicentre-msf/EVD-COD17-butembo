@@ -1,9 +1,8 @@
 # ! Script of the CFR (létalité) situation in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* Onset -> death delay distribution ----------------------------------
 # gamma fit from R/5_delays.R, used to adjust the CFR for unresolved cases
@@ -155,7 +154,7 @@ butembo_cfr_time <- rolling |>
 butembo_cfr_time
 
 ggsave(
-  fs::path(out_dir, "butembo_cfr_time.png"),
+  fs::path(plots_dir, "butembo_cfr_time.png"),
   butembo_cfr_time,
   height = 6,
   width = 8,
@@ -244,7 +243,7 @@ butembo_cfr_age <- cfr_by_age |>
 butembo_cfr_age
 
 ggsave(
-  fs::path(out_dir, "butembo_cfr_age.png"),
+  fs::path(plots_dir, "butembo_cfr_age.png"),
   butembo_cfr_age,
   height = 7,
   width = 9,

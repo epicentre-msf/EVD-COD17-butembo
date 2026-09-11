@@ -4,7 +4,7 @@ source(here::here("R", "0_global.R"))
 library(tidyverse)
 library(epicontacts)
 
-ll <- readRDS(latest_narr_ll_clean)$data
+ll <- readRDS(latest_narr_ll_clean)
 
 trans_dat <- readRDS(latest_transmission_clean)
 
@@ -108,7 +108,7 @@ chains_gg <- chains_gg +
 chains_gg
 
 ggsave(
-  fs::path(out_dir, "butembo_transmission_chains.png"),
+  fs::path(plots_dir, "butembo_transmission_chains.png"),
   chains_gg,
   width = 12,
   height = 10,

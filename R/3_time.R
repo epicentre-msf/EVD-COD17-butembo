@@ -1,9 +1,8 @@
 # Script of the TIME analyses in Butembo
 
 source(here::here("R", "0_global.R"))
-butembo_pos <- readRDS(latest_narr_ll_clean)
-pos_data_clean <- butembo_pos$data
-date_report <- butembo_pos$date_updated # source-file modification date (Date)
+pos_data_clean <- readRDS(latest_narr_ll_clean)
+date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
 #* TIME (Onset) --------------------------------------------------------
 
@@ -29,9 +28,9 @@ inci <- pos_data_clean |>
 
 #* Global weekly epicurve, by infection origin
 inf_cols <- c(
-  "Locale" = "#bc5c5c", # red
-  "Importée" = "#3a7ca5", # blue
-  "Incertaine" = "grey75"
+  "Local" = "#bc5c5c", # red
+  "Imported" = "#3a7ca5", # blue
+  "Unknown" = "grey75"
 )
 
 # atténue les semaines récentes, vraisemblablement incomplètes (délai de
@@ -110,7 +109,7 @@ nk_conf_epicurve_week <- inci_week |>
 nk_conf_epicurve_week
 
 ggsave(
-  fs::path(out_dir, "butembo_global_epicurve_week.png"),
+  fs::path(plots_dir, "butembo_global_epicurve_week.png"),
   nk_conf_epicurve_week,
   height = 7,
   width = 10,
@@ -119,10 +118,14 @@ ggsave(
 )
 
 #* Health Zones, weekly, coloured by health zone
+# une entrée par zone de CONFIG$filter_hz, sinon les nouvelles zones sortent en gris
 adm2_cols <- c(
   "Butembo" = "#f08080", # salmon
   "Katwa" = "#3a7ca5", # blue
-  "Musienene" = "#408323"
+  "Musienene" = "#408323", # green
+  "Kalunguta" = "#9a6fb0", # purple
+  "Kyondo" = "#e0a458", # ochre
+  "Masereka" = "#4f9d9d" # teal
 )
 
 inci_adm2_week <- pos_data_clean |>
@@ -188,7 +191,7 @@ nk_conf_epicurve <- inci_adm2_week |>
 nk_conf_epicurve
 
 ggsave(
-  fs::path(out_dir, "butembo_HZ_epicurve_week.png"),
+  fs::path(plots_dir, "butembo_HZ_epicurve_week.png"),
   nk_conf_epicurve,
   height = 7,
   width = 10,
@@ -282,7 +285,7 @@ nk_conf_epicurve_notif <- inci_adm2_week_notif |>
 nk_conf_epicurve_notif
 
 ggsave(
-  fs::path(out_dir, "butembo_HZ_epicurve_week_notif.png"),
+  fs::path(plots_dir, "butembo_HZ_epicurve_week_notif.png"),
   nk_conf_epicurve_notif,
   height = 7,
   width = 10,

@@ -21,10 +21,10 @@ library(knitr)
 # Center every figure/table image in the report.
 opts_chunk$set(fig.align = "center")
 
-# Figures live in output/ at the project root (see out_dir in R/0_global.R).
-fig <- function(name) {
-  here::here("output", name)
-}
+# Mirrors R/0_global.R. Sourcing it instead would hit SharePoint at knit time.
+out_dir <- here::here("output")
+plots_dir <- fs::path(out_dir, "plots")
+tables_dir <- fs::path(out_dir, "tables")
 
 # Data cut-off: passed in by _render.R (modification time of the positives
 # summary). Falls back to today if the report is knitted on its own.
@@ -47,13 +47,13 @@ Synthèse des cas positifs confirmés dans les zones de santé de Butembo et Kat
 
 ```{r}
 #| fig-cap: "Résumé des cas confirmés par zone de santé : nouveaux cas récents et statut du patient."
-include_graphics(fig("butembo_pos_summary.png"))
+include_graphics(fs::path(tables_dir, "butembo_pos_summary.png"))
 ```
 
 ```{r}
 #| fig-cap: "Cas confirmés et notification par formation sanitaire."
 #| out-width: "100%"
-include_graphics(fig("butembo_map_confirmed_reporting.png"))
+include_graphics(fs::path(plots_dir, "butembo_map_confirmed_reporting.png"))
 ```
 
 ### Cas par zone de santé et aire de santé
@@ -61,39 +61,39 @@ include_graphics(fig("butembo_map_confirmed_reporting.png"))
 ```{r}
 #| fig-cap: "Zone de santé de Butembo — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
 #| out-width: "100%"
-include_graphics(fig("butembo_cases_by_place_butembo.png"))
+include_graphics(fs::path(tables_dir, "butembo_cases_by_place_butembo.png"))
 ```
 
 ```{r}
 #| fig-cap: "Zone de santé de Katwa — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
 #| out-width: "100%"
-include_graphics(fig("butembo_cases_by_place_katwa.png"))
+include_graphics(fs::path(tables_dir, "butembo_cases_by_place_katwa.png"))
 ```
 
 ```{r}
 #| fig-cap: "Zone de santé de Musienene — cas par aire de santé de résidence, statut d'infection, alertes et suivi des contacts."
 #| out-width: "100%"
-include_graphics(fig("butembo_cases_by_place_musienene.png"))
+include_graphics(fs::path(tables_dir, "butembo_cases_by_place_musienene.png"))
 ```
 
 ### Létalité
 
 ```{r}
 #| fig-cap: "Létalité — brute et ajustée pour le délai début des symptômes → décès."
-include_graphics(fig("butembo_cfr.png"))
+include_graphics(fs::path(tables_dir, "butembo_cfr.png"))
 ```
 
 ```{r}
 #| fig-cap: "Létalité ajustée par groupe d'âge."
 #| out-width: "100%"
-include_graphics(fig("butembo_cfr_age.png"))
+include_graphics(fs::path(plots_dir, "butembo_cfr_age.png"))
 ```
 
 ## Activités du CTE
 
 ```{r}
 #| fig-cap: "Situation du CTE (Kitatumba) — occupation des lits et flux (admissions & sorties) sur les dernières 24h, 48h et 7 jours."
-include_graphics(fig("butembo_etc_panel.png"))
+include_graphics(fs::path(tables_dir, "butembo_etc_panel.png"))
 ```
 
 ## Évolution temporelle
@@ -101,19 +101,19 @@ include_graphics(fig("butembo_etc_panel.png"))
 ```{r}
 #| fig-cap: "Courbe épidémique hebdomadaire par date de notification, par zone de santé."
 #| out-width: "100%"
-include_graphics(fig("butembo_HZ_epicurve_week_notif.png"))
+include_graphics(fs::path(plots_dir, "butembo_HZ_epicurve_week_notif.png"))
 ```
 
 ```{r}
 #| fig-cap: "Courbe épidémique hebdomadaire par date de début des symptômes — ensemble des zones."
 #| out-width: "100%"
-include_graphics(fig("butembo_global_epicurve_week.png"))
+include_graphics(fs::path(plots_dir, "butembo_global_epicurve_week.png"))
 ```
 
 ```{r}
 #| fig-cap: "Courbe épidémique hebdomadaire par date de début des symptômes, par zone de santé."
 #| out-width: "100%"
-include_graphics(fig("butembo_HZ_epicurve_week.png"))
+include_graphics(fs::path(plots_dir, "butembo_HZ_epicurve_week.png"))
 ```
 
 ## Délais épidémiologiques
@@ -121,13 +121,13 @@ include_graphics(fig("butembo_HZ_epicurve_week.png"))
 ```{r}
 #| fig-cap: "Délais épidémiologiques. (A) Début des symptômes → issue (décès / guérison). (B) Début des symptômes → notification, selon l'issue (décédés / guéris)."
 #| out-width: "100%"
-include_graphics(fig("butembo_delays_combined.png"))
+include_graphics(fs::path(plots_dir, "butembo_delays_combined.png"))
 ```
 
 ```{r}
 #| fig-cap: "Délais épidémiologiques. (A) Début des symptômes → issue (décès / guérison). (B) Début des symptômes → notification, selon l'issue (décédés / guéris)."
 #| out-width: "100%"
-include_graphics(fig("butembo_map_delay_notification.png"))
+include_graphics(fs::path(plots_dir, "butembo_map_delay_notification.png"))
 ```
 
 ## Parcours de soins
@@ -135,12 +135,12 @@ include_graphics(fig("butembo_map_delay_notification.png"))
 ```{r}
 #| fig-cap: "Nombre de structures de santé visitées par cas et durée de séjour par structure."
 #| out-width: "100%"
-include_graphics(fig("butembo_hf_visits_distribution.png"))
+include_graphics(fs::path(plots_dir, "butembo_hf_visits_distribution.png"))
 ```
 
 ```{r}
 #| fig-cap: "Structures de santé ayant vu le plus de cas dans les 7 / 14 / 21 derniers jours (CTE exclus)."
-include_graphics(fig("butembo_hf_top_structures.png"))
+include_graphics(fs::path(tables_dir, "butembo_hf_top_structures.png"))
 ```
 
 ## Caractéristiques des cas
@@ -148,12 +148,12 @@ include_graphics(fig("butembo_hf_top_structures.png"))
 ```{r}
 #| fig-cap: "Pyramide des âges des cas confirmés, par sexe et origine de l'infection."
 #| out-width: "90%"
-include_graphics(fig("butembo_age_pyramid.png"))
+include_graphics(fs::path(plots_dir, "butembo_age_pyramid.png"))
 ```
 
 ```{r}
 #| fig-cap: "Décès à l'arrivée à l'ETC et décès communautaires parmi les cas confirmés."
-include_graphics(fig("butembo_mortality_desc.png"))
+include_graphics(fs::path(tables_dir, "butembo_mortality_desc.png"))
 ```
 
 ## Chaînes de transmission
@@ -161,13 +161,13 @@ include_graphics(fig("butembo_mortality_desc.png"))
 ```{r}
 #| fig-cap: "Lien de transmission, origine de l'infection, suivi comme contact et type de transmission parmi les infections locales."
 #| out-width: "100%"
-include_graphics(fig("butembo_transmission_overview.png"))
+include_graphics(fs::path(tables_dir, "butembo_transmission_overview.png"))
 ```
 
 ```{r}
 #| fig-cap: "Chaînes de transmission des cas confirmés, positionnées par date de début des symptômes. Chaque cas est coloré selon son statut ; les liens indiquent une transmission par contact connu (trait plein) ou hypothétique (pointillés)."
 #| out-width: "100%"
-include_graphics(fig("butembo_transmission_chains.png"))
+include_graphics(fs::path(plots_dir, "butembo_transmission_chains.png"))
 ```
 
 ## Alertes & Suivi des contacts

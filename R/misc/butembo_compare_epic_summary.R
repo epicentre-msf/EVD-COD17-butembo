@@ -150,7 +150,7 @@ mismatches <- comparison |>
 # shaded band, so it's easy to scan one patient's discrepancies at a glance.
 qxl::qxl(
   mismatches,
-  file = fs::path(out_dir, "butembo_compare_mismatches.xlsx"),
+  file = fs::path(tables_dir, "butembo_compare_mismatches.xlsx"),
   group = ".id",
   filter = TRUE
 )
