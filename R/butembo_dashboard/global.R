@@ -98,7 +98,7 @@ group_vars <- c(
 source("mod_vb.R")
 
 # serve www/ (logos, stylesheet) to the browser
-# addResourcePath("assets", here::here("R", "butembo_dashboard", "www"))
+addResourcePath("assets", "www")
 
 #* Color Palettes  -----------------------
 
