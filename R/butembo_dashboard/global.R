@@ -36,7 +36,6 @@ but_ll |>
   select(contains('adm2'))
 
 but_ll <- but_ll |>
-
   left_join(
     select(adm1_nk, adm1_name, adm1_pcode__onset = adm1_pcode),
     join_by(adm1_name__onset == adm1_name)
