@@ -15,15 +15,12 @@ ui <- page_navbar(
       )
     )
   ),
-  # main dashboard: filter sidebar + map (left) + time/person stack (right)
   nav_panel(
     title = tags$span(bsicons::bs_icon("clipboard-data"), "Surveillance data"),
     value = "surveillance",
     bslib::layout_sidebar(
       gap = 10,
       padding = NULL,
-      # the epishiny filter sidebar. wrapper only widens the default sidebar -
-      # filter_ui() passes its header, accordion and filter_info through the dots
       sidebar = filter_ui(
         id = "filter",
         date_vars = date_vars,
@@ -32,7 +29,6 @@ ui <- page_navbar(
           bslib::sidebar(..., id = "filter", bg = "#fff", width = 265)
         }
       ),
-      # headline counts, above the charts and driven by the same filters
       mod_vb_ui("vb"),
       layout_columns(
         col_widths = c(6, 6),
@@ -65,23 +61,8 @@ ui <- page_navbar(
   # Lab panel
   nav_panel(
     title = tags$span(bsicons::bs_icon("clipboard-data"), "Lab data"),
-    value = "lab",
-    bslib::layout_sidebar(
-      gap = 10,
-      padding = NULL,
-      # the epishiny filter sidebar. wrapper only widens the default sidebar -
-      # filter_ui() passes its header, accordion and filter_info through the dots
-      sidebar = filter_ui(
-        id = "filter",
-        date_vars = date_vars,
-        group_vars = group_vars,
-        wrapper = function(...) {
-          bslib::sidebar(..., id = "filter", bg = "#fff", width = 265)
-        }
-      )
-    )
+    value = "lab"
   ),
-
   nav_spacer(),
   nav_item(
     tags$a(

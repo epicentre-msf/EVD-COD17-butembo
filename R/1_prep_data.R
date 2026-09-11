@@ -4,6 +4,10 @@
 
 #* TODO ------------------------------------
 
+#* CONFIG ------------------------------------
+
+SEND_TO_SERVER <- FALSE
+
 #* Load packages ---------------------------
 source(here::here("R", "0_global.R"))
 
@@ -11,15 +15,23 @@ source(here::here("R", "0_global.R"))
 time_write <- time_stamp()
 
 #* Local geo cache --------------------------
-# 0_global.R's adm1/adm2/adm3 may already be the local cache read back, so
-# re-read straight from SharePoint here to actually refresh it
-adm1 <- readRDS(fs::path(sf_data_path, "COD_adm1_sub.rds"))
-adm2 <- readRDS(fs::path(sf_data_path, "COD_adm2_sub.rds"))
-adm3 <- readRDS(fs::path(sf_data_path, "COD_adm3_sub.rds"))
+#load and save to local the geobase
+# adm1 <- readRDS(fs::path(sf_data_path, "COD_adm1.rds"))
+# saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1.rds"))
+# adm1_sub <- readRDS(fs::path(sf_data_path, "COD_adm1_sub.rds"))
+# saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1_sub.rds"))
 
-saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1_sub.rds"))
-saveRDS(adm2, fs::path(local_geobase_dir, "COD_adm2_sub.rds"))
-saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3_sub.rds"))
+# # adm2
+# adm2 <- readRDS(fs::path(sf_data_path, "COD_adm2.rds"))
+# saveRDS(adm2, fs::path(local_geobase_dir, "COD_adm2.rds"))
+# adm2_sub <- readRDS(fs::path(sf_data_path, "COD_adm2_sub.rds"))
+# saveRDS(adm2, fs::path(local_geobase_dir, "COD_adm2_sub.rds"))
+
+# # adm3
+# adm3 <- readRDS(fs::path(sf_data_path, "COD_adm3.rds"))
+# saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3.rds"))
+# adm3_sub <- readRDS(fs::path(sf_data_path, "COD_adm3_sub.rds"))
+# saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3_sub.rds"))
 
 #* Import data -----------------------------
 ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
@@ -121,21 +133,27 @@ ll_narr_clean <- ll_narr |>
       1
     )),
 
-    #! Place of Notification
-
-    adm1_name = case_when(
+    #! Place of residence / onset
+    adm1_name__onset = case_when(
       res_equal_onset == "Yes" ~ adm1_name__res,
       .default = adm1_name__onset
     ),
-    adm2_name = case_when(
+    adm2_name__onset = case_when(
       res_equal_onset == "Yes" ~ adm2_name__res,
       .default = adm2_name__onset
     ),
-
-    adm3_name = case_when(
+    adm3_name__onset = case_when(
       res_equal_onset == "Yes" ~ adm3_name__res,
       .default = adm3_name__onset
     ),
+
+    #! Place of Notification
+    adm2_name__notif = case_when(
+      is.na(adm2_name__notif) ~ adm2_comptabilisation,
+      .default = adm2_name__notif
+    ),
+
+    across(contains("adm1"), ~ str_remove(.x, "COD ")),
 
     # inferred only from a complete admission-exit pair: same day means the
     # patient never spent a night in care, so was dead at notification
@@ -204,6 +222,26 @@ cli::cli_alert_info(
   "{n_distinct(ll_narr_clean$unique_id)} unique_id across \\
    {nrow(ll_narr_clean)} rows"
 )
+
+# Standardise the admin levels
+ll_narr_clean |>
+  left_join(
+    select(adm1, adm1_name, adm1_pcode__onset = adm1_pcode),
+    join_by(adm1_name__onset == adm1_name)
+  ) |>
+  left_join(
+    select(adm2, adm2_name, adm2_pcode__onset = adm2_pcode),
+    join_by(adm2_name__onset == adm2_name)
+  ) |>
+  left_join(
+    select(adm3, adm3_name, adm3_pcode__onset = adm3_pcode),
+    join_by(adm3_name__onset == adm3_name)
+  ) |>
+  select(contains("onset"))
+
+ll_narr_clean |>
+  filter(is.na(adm2_name__notif)) |>
+  select(adm2_comptabilisation, contains("notif"))
 
 #* Duplicate and missing pid ---------------
 # review only, nothing dropped, so no denominator moves
@@ -302,12 +340,14 @@ app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 
 saveRDS(app_data, app_data_path)
 
-#* Send data to the server
-system2(
-  "rsync",
-  args = c(
-    "-zavh",
-    fs::path_expand(app_data_path),
-    "episerv:/home/epicentre/EVD-COD17-butembo/R/butembo_dashboard//data/"
+if (SEND_TO_SERVER) {
+  #* Send data to the server
+  system2(
+    "rsync",
+    args = c(
+      "-zavh",
+      fs::path_expand(app_data_path),
+      "episerv:/home/epicentre/EVD-COD17-butembo/R/butembo_dashboard//data/"
+    )
   )
-)
+}
