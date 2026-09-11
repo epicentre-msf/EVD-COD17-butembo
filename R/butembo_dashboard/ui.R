@@ -17,8 +17,8 @@ ui <- page_navbar(
   ),
   # main dashboard: filter sidebar + map (left) + time/person stack (right)
   nav_panel(
-    title = tags$span(bsicons::bs_icon("clipboard-data"), "Dashboard"),
-    value = "dashboard",
+    title = tags$span(bsicons::bs_icon("clipboard-data"), "Surveillance data"),
+    value = "surveillance",
     bslib::layout_sidebar(
       gap = 10,
       padding = NULL,
@@ -53,14 +53,35 @@ ui <- page_navbar(
             date_vars = date_vars,
             group_vars = group_vars,
             date_interval_default = "week",
-            group_var_default = "EVD_status",
+            group_var_default = "type_of_exit",
             ratio_line_lab = "Show CFR line?"
           ),
           person_ui(id = "age_sex")
         )
       )
+    ),
+  ),
+
+  # Lab panel
+  nav_panel(
+    title = tags$span(bsicons::bs_icon("clipboard-data"), "Lab data"),
+    value = "lab",
+    bslib::layout_sidebar(
+      gap = 10,
+      padding = NULL,
+      # the epishiny filter sidebar. wrapper only widens the default sidebar -
+      # filter_ui() passes its header, accordion and filter_info through the dots
+      sidebar = filter_ui(
+        id = "filter",
+        date_vars = date_vars,
+        group_vars = group_vars,
+        wrapper = function(...) {
+          bslib::sidebar(..., id = "filter", bg = "#fff", width = 265)
+        }
+      )
     )
   ),
+
   nav_spacer(),
   nav_item(
     tags$a(

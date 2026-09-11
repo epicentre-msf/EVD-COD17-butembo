@@ -13,16 +13,6 @@ source(here::here("R", "map_theme.R"))
 #* CONFIG ------------------------------------------------
 
 CONFIG <- list(
-  # health zones the outbreak is followed in, on adm2_comptabilisation
-  filter_hz = c(
-    "Butembo",
-    "Katwa",
-    "Musienene",
-    "Kalunguta",
-    "Kyondo",
-    "Masereka"
-  ),
-
   # sitreps before this date are incomplete
   sitrep_start = as.Date("2026-06-21"),
 

@@ -185,7 +185,6 @@ ll_narr_clean <- ll_narr |>
   rename(pid = patient_site_id) |>
   # death_place supersedes it: the raw field mixed a place with a yes/no
   select(-c(community_death, dead_upon_arrival)) |>
-  filter(adm2_comptabilisation %in% CONFIG$filter_hz) |>
   # pid is neither unique nor always filled (see the dupes check below), so
   # the key pairing it with the name is what identifies a case. Only the
   # serial drawn from that key is shared; the key never leaves this script.
@@ -246,7 +245,7 @@ hf_visits <- ll_narr_clean |>
   rename_with(\(x) str_remove(x, "_$")) |>
   mutate(across(where(is.character), \(x) na_if(str_squish(x), ""))) |>
   # drops the empty visit slots the wide layout leaves behind
-  filter(!is.na(HF_name_visited)) |>
+  # filter(!is.na(HF_name_visited)) |>
   rename(hf_name = HF_name_visited) |>
   mutate(
     # "site | aire de santé | zone de santé" where the encoding is present
@@ -292,10 +291,11 @@ export_clean(hf_visits, "hf-visits", time_write, dir = local_hf_dir)
 # app_data.rds feeds the evd-2026-app dashboard on episerv
 app_data <- list(
   linelist = ll_narr_clean,
-  hf_visits = hf_visits
+  hf_visits = hf_visits,
+  admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
 
-app_data_path <- fs::path(local_dir, "app_data.rds")
+app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 
 saveRDS(app_data, app_data_path)
 

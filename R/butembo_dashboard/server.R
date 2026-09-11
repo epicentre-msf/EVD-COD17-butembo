@@ -103,7 +103,7 @@ server <- function(input, output, session) {
     )
     updateSelectInput(session, "map-var", selected = "EVD_status")
     # epicurve date axis defaults to date of notification
-    updateSelectInput(session, "curve-date", selected = "date_notification")
+    updateSelectInput(session, "curve-date", selected = "date_lab_result_1")
   }) |>
     bindEvent(TRUE, once = TRUE)
 
