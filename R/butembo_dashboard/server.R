@@ -55,6 +55,7 @@ server <- function(input, output, session) {
     df = filter_data$df,
     geo_data = geo_data,
     group_vars = group_vars,
+    base_maps = c("CartoDB.Voyager", "CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT"),
     time_filter = bar_click,
     filter_info = filter_data$filter_info
   )
@@ -109,7 +110,7 @@ server <- function(input, output, session) {
 
   # zoom the map to the Butembo / Katwa extent once it is initialised
   # (map_zoom fires when leaflet first reports its view).
-  nk_bbox <- sf::st_bbox(adm3_nk)
+  nk_bbox <- sf::st_bbox(adm2_nk |> filter(adm2_name %in% c("Katwa", "Butembo")))
   observe({
     leaflet::leafletProxy("map-map", session) |>
       leaflet::fitBounds(
