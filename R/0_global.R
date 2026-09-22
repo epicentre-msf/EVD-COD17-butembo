@@ -13,8 +13,7 @@ source(here::here("R", "map_theme.R"))
 #* CONFIG ------------------------------------------------
 
 CONFIG <- list(
-  # sitreps before this date are incomplete
-  sitrep_start = as.Date("2026-06-21"),
+  export_prefix = "BUT-EVD",
 
   # under-fives split out: they are a large share of the cases
   age_breaks = c(0, 1, 5, seq(10, 60, 10), Inf),
@@ -34,14 +33,17 @@ CONFIG <- list(
   week_start = 1
 )
 
+#* SHAREPOINT PATH ------------------------------
 onedrive <- Sys.getenv("SHAREPOINT_PATH")
 
 # Epicentre compilation
 epicentre_clean_cod_data_path <- fs::path(
   onedrive,
-  "Ebola Outbreaks - COD_UGA-2026",
+  "Epi Platform-BVD – Data and Tools - Documents",
+  "Data",
+  "data",
   "COD",
-  "data"
+  "linelist"
 )
 
 #* BUTEMBO PATH ------------------------------------
@@ -66,6 +68,14 @@ butembo_project_data_path <- fs::path(
   "Donnees"
 )
 
+#*TRASMISSION DATA
+transmission_dir <- fs::path(
+  butembo_project_data_path,
+  "linelists",
+  "ensemble",
+  "transmission_data"
+)
+
 #* ETC data --------------------------
 etc_ll_path <- fs::dir_ls(
   fs::path(
@@ -77,12 +87,14 @@ etc_ll_path <- fs::dir_ls(
 ) |>
   max()
 
+#* Spatial data --------------------
 butembo_project_sf_data_path <- fs::path(
   butembo_project_data_path,
   "spatiale"
 )
 
-#sitrep summary
+#* Sitreps summary ------------------
+
 sitrep_path <- fs::path(
   butembo_project_data_path,
   "brute",
@@ -90,7 +102,7 @@ sitrep_path <- fs::path(
   "sitrep_summary.xlsx"
 )
 
-# the narrative linelist RAW, same file EVD-COD17-incubation-si reads
+#* ENSEMBLE LINELIST ----------------
 narr_ll_dir <- fs::path(
   butembo_project_data_path,
   "linelists",
@@ -100,14 +112,8 @@ narr_ll_dir <- fs::path(
 
 latest_narr_ll <- fs::path(narr_ll_dir, "ensemble_LL.xlsx")
 
-# second copy of the clean linelist, kept next to the raw export for the team
+# clean ensemble
 narr_ll_clean_dir <- fs::path(narr_ll_dir, "clean")
-
-# clean data folder (timestamped exports written by 1_prep_data.R)
-butembo_project_clean_data_path <- fs::path(
-  butembo_project_data_path,
-  "propre"
-)
 
 # de-identified exports for colleagues, written by prep_for_sharing.R
 butembo_share_data_path <- fs::path(
@@ -115,21 +121,12 @@ butembo_share_data_path <- fs::path(
   "partage"
 )
 
-# local, gitignored cache: lets scripts (e.g. the dashboard) reread the adm
-# files and cleaned linelist without a live SharePoint connection
 local_dir <- here::here("local")
 local_geobase_dir <- fs::path(local_dir, "geobase")
 local_ll_dir <- fs::path(local_dir, "linelist")
 local_hf_dir <- fs::path(local_dir, "hf-visits")
 
 fs::dir_create(c(local_geobase_dir, local_ll_dir, local_hf_dir))
-
-# newest timestamped export of each dataset, from utils.R; linelist prefers
-# the local cache first (see latest_clean_cached())
-latest_narr_ll_clean <- latest_clean_cached("linelist")
-latest_hf_visits_clean <- latest_clean("hf-visits")
-#latest_alert_clean <- latest_clean("alert-data")
-#latest_contact_clean <- latest_clean("contact-data")
 
 #* OUTPUT DIRECTORIES ------------------------------------
 out_dir <- here::here("output")
@@ -146,4 +143,4 @@ sf_data_path <- fs::path(butembo_project_sf_data_path, "rds")
 adm1 <- read_geo_cached("COD_adm1_sub.rds")
 adm2 <- read_geo_cached("COD_adm2_sub.rds")
 adm3 <- read_geo_cached("COD_adm3_sub.rds")
-hf <- readRDS(fs::path(sf_data_path, "COD_HF_sub_gis.rds"))
+#hf <- readRDS(fs::path(sf_data_path, "COD_HF_sub_gis.rds"))

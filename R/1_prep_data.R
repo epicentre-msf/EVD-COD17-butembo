@@ -6,6 +6,7 @@
 
 #* CONFIG ------------------------------------
 
+EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- FALSE
 
 #* Load packages ---------------------------
@@ -15,7 +16,8 @@ source(here::here("R", "0_global.R"))
 time_write <- time_stamp()
 
 #* Local geo cache --------------------------
-#load and save to local the geobase
+
+#load and save to local the geobase from sharepoint -- silenced because of size
 # adm1 <- readRDS(fs::path(sf_data_path, "COD_adm1.rds"))
 # saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1.rds"))
 # adm1_sub <- readRDS(fs::path(sf_data_path, "COD_adm1_sub.rds"))
@@ -33,11 +35,16 @@ time_write <- time_stamp()
 # adm3_sub <- readRDS(fs::path(sf_data_path, "COD_adm3_sub.rds"))
 # saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3_sub.rds"))
 
+#* Geobase -----------------------------
+adm1 <- readRDS(fs::path(local_geobase_dir, "COD_adm1.rds"))
+adm2 <- readRDS(fs::path(local_geobase_dir, "COD_adm2.rds"))
+adm3 <- readRDS(fs::path(local_geobase_dir, "COD_adm3.rds"))
+
 #* Import data -----------------------------
 ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
   as_tibble() |>
   # rows only: dropping empty columns would remove a field nobody filled
-  janitor::remove_empty(which = "rows")
+  janitor::remove_empty(which = c("rows", "cols"))
 
 n_import <- nrow(ll_narr)
 
@@ -203,12 +210,42 @@ ll_narr_clean <- ll_narr |>
     ),
     death_place = factor(death_place, levels = c("CTE/CT", "Community"))
   ) |>
+
+  # ! # Standardise the admin levels - this makes file super large and laggy
+  # # ! ONSET
+  # left_join(
+  #   select(adm1, adm1_name, adm1_pcode__onset = adm1_pcode),
+  #   join_by(adm1_name__onset == adm1_name)
+  # ) |>
+  # left_join(
+  #   select(adm2, adm2_name, adm2_pcode__onset = adm2_pcode),
+  #   join_by(adm2_name__onset == adm2_name)
+  # ) |>
+  # left_join(
+  #   select(adm3, adm3_name, adm3_pcode__onset = adm3_pcode, adm2_pcode),
+  #   join_by(adm2_pcode__onset == adm2_pcode, adm3_name__onset == adm3_name)
+  # ) |>
+
+  # # ! NOTIFICATION
+  # left_join(
+  #   select(adm1, adm1_name, adm1_pcode__notif = adm1_pcode),
+  #   join_by(adm1_name__notif == adm1_name)
+  # ) |>
+  # left_join(
+  #   select(adm2, adm2_name, adm2_pcode__notif = adm2_pcode),
+  #   join_by(adm2_name__notif == adm2_name)
+  # ) |>
+  # left_join(
+  #   select(adm3, adm3_name, adm3_pcode__notif = adm3_pcode, adm2_pcode),
+  #   join_by(adm3_name__notif == adm3_name, adm2_name__notif == adm2_pcode)
+  # ) |>
+  # # ! COMPTABILISATION
+  # left_join(
+  #   select(adm2, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
+  #   join_by(adm2_comptabilisation == adm2_name)
+  # ) |>
   rename(pid = patient_site_id) |>
-  # death_place supersedes it: the raw field mixed a place with a yes/no
   select(-c(community_death, dead_upon_arrival)) |>
-  # pid is neither unique nor always filled (see the dupes check below), so
-  # the key pairing it with the name is what identifies a case. Only the
-  # serial drawn from that key is shared; the key never leaves this script.
   mutate(id_key = str_squish(paste(pid, nom))) |>
   mutate(unique_id = sprintf("BUT-%04d", cur_group_id()), .by = id_key) |>
   select(-id_key) |>
@@ -222,26 +259,6 @@ cli::cli_alert_info(
   "{n_distinct(ll_narr_clean$unique_id)} unique_id across \\
    {nrow(ll_narr_clean)} rows"
 )
-
-# Standardise the admin levels
-ll_narr_clean |>
-  left_join(
-    select(adm1, adm1_name, adm1_pcode__onset = adm1_pcode),
-    join_by(adm1_name__onset == adm1_name)
-  ) |>
-  left_join(
-    select(adm2, adm2_name, adm2_pcode__onset = adm2_pcode),
-    join_by(adm2_name__onset == adm2_name)
-  ) |>
-  left_join(
-    select(adm3, adm3_name, adm3_pcode__onset = adm3_pcode),
-    join_by(adm3_name__onset == adm3_name)
-  ) |>
-  select(contains("onset"))
-
-ll_narr_clean |>
-  filter(is.na(adm2_name__notif)) |>
-  select(adm2_comptabilisation, contains("notif"))
 
 #* Duplicate and missing pid ---------------
 # review only, nothing dropped, so no denominator moves
@@ -258,12 +275,26 @@ cli::cli_alert_warning("{sum(is.na(ll_narr_clean$pid))} rows with no pid")
 
 rio::export(dupes_id, fs::path(tables_dir, "dupes_id.xlsx"))
 
-#! Export the linelist: Donnees/propre is what the analysis scripts read, the
-#! copy next to the raw export is for the team. Every column goes out, nom
-#! included - prep_for_sharing.R is what de-identifies it for colleagues.
-export_clean(ll_narr_clean, "linelist", time_write)
-export_clean(ll_narr_clean, "linelist", time_write, dir = narr_ll_clean_dir)
-export_clean(ll_narr_clean, "linelist", time_write, dir = local_ll_dir)
+#! Export the linelist: Donnees/ in sharepoint
+
+if (EXPORT_TO_SHAREPOINT) {
+  saveRDS(
+    ll_narr_clean,
+    fs::path(
+      narr_ll_clean_dir,
+      glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
+    )
+  )
+}
+# export local version
+saveRDS(
+  ll_narr_clean,
+  fs::path(
+    local_ll_dir,
+    glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
+  )
+)
+
 
 #* HEALTH FACILITY VISITS ------------------
 # one row per visit
@@ -325,8 +356,36 @@ cli::cli_alert_info(
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
 
-export_clean(hf_visits, "hf-visits", time_write)
 export_clean(hf_visits, "hf-visits", time_write, dir = local_hf_dir)
+
+#* Prepare dashboard data -------------------------------------------
+
+# all pcodes needed for the data
+
+adm1_pcode_used <- unique(na.omit(c(
+  ll_narr_clean$adm1_pcode__onset,
+  ll_narr_clean$adm1_pcode__notif
+)))
+
+adm2_pcode_used <- unique(na.omit(c(
+  ll_narr_clean$adm2_pcode__onset,
+  ll_narr_clean$adm2_pcode__notif,
+  ll_narr_clean$adm2_pcode__comptabilisation
+)))
+
+adm3_pcode_used <- unique(na.omit(c(
+  ll_narr_clean$adm3_pcode__onset,
+  ll_narr_clean$adm3_pcode__notif
+)))
+
+adm1 <- adm1 |>
+  filter(adm1_pcode %in% adm1_pcode_used)
+
+adm2 <- adm2 |>
+  filter(adm2_pcode %in% adm2_pcode_used)
+
+adm3 <- adm3 |>
+  filter(adm3_pcode %in% adm3_pcode_used)
 
 #* Save to server ------------------------------------------------------
 # app_data.rds feeds the evd-2026-app dashboard on episerv
@@ -347,7 +406,7 @@ if (SEND_TO_SERVER) {
     args = c(
       "-zavh",
       fs::path_expand(app_data_path),
-      "episerv:/home/epicentre/EVD-COD17-butembo/R/butembo_dashboard//data/"
+      "episerv:/home/epicentre/EVD-COD17-butembo/R/butembo_dashboard/data/"
     )
   )
 }

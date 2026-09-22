@@ -38,9 +38,6 @@ server <- function(input, output, session) {
         )
       )
   })
-  # the sidebar owns the data: every module below plots filter_data$df, and
-  # map / bar clicks feed back as extra filter chips. bar_click and map_click are
-  # forward references - epishiny only forces them inside reactive contexts.
   filter_data <- filter_server(
     id = "filter",
     df = but_ll,
@@ -99,7 +96,7 @@ server <- function(input, output, session) {
     shinyWidgets::updateRadioGroupButtons(
       session,
       "map-geo_level",
-      selected = "Health Area"
+      selected = "Health Zone"
     )
     updateSelectInput(session, "map-var", selected = "EVD_status")
     # epicurve date axis defaults to date of notification
@@ -109,7 +106,7 @@ server <- function(input, output, session) {
 
   # zoom the map to the Butembo / Katwa extent once it is initialised
   # (map_zoom fires when leaflet first reports its view).
-  nk_bbox <- sf::st_bbox(adm3_nk)
+  nk_bbox <- sf::st_bbox(app_data$admin_data$adm2)
   observe({
     leaflet::leafletProxy("map-map", session) |>
       leaflet::fitBounds(

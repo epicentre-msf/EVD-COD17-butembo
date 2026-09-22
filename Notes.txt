@@ -1,0 +1,2 @@
+use this to update server code from terminal 
+`ssh episerv "cd EVD-COD17-butembo && git pull"`

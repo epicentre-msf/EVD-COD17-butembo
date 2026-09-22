@@ -12,63 +12,36 @@ options(
 )
 
 #* Import DATA  ------------------------------------------------
+app_data_path <- fs::path("data", "app_data.rds")
 
 # App data
-app_data <- readRDS(fs::path("data", "app_data.rds"))
-
-admin_data <- app_data$admin_data
-
-adm1_nk <- admin_data$adm1 |>
-  filter(adm1_name %in% c("Nord-Kivu"))
-
-adm2_nk <- admin_data$adm2 |>
-  filter(adm1_name %in% c("Nord-Kivu"))
-
-adm3_nk <- admin_data$adm3 |>
-  filter(adm1_name %in% c("Nord-Kivu"))
+app_data <- readRDS(app_data_path)
 
 # Linelist data
 but_ll <- app_data$linelist
 
 #* Geo data ------------------------------------------------
 
-but_ll |>
-  select(contains('adm2'))
-
-but_ll <- but_ll |>
-  left_join(
-    select(adm1_nk, adm1_name, adm1_pcode__onset = adm1_pcode),
-    join_by(adm1_name__onset == adm1_name)
-  ) |>
-  left_join(
-    select(adm2_nk, adm2_name, adm2_pcode__onset = adm2_pcode),
-    join_by(adm2_name__onset == adm2_name)
-  ) |>
-  left_join(
-    select(adm3_nk, adm3_name, adm3_pcode__onset = adm3_pcode),
-    join_by(adm3_name__onset == adm3_name)
-  )
-
 geo_data <- list(
   geo_layer(
     layer_name = "Province", # name of the boundary layer
-    sf = adm1_nk, # sf object with boundary polygons
+    sf = app_data$admin_data$adm1,
     name_var = "adm1_name", # column with place names
     pop_var = "adm1_pop", # column with population data (optional)
-    join_by = c("pcode" = "adm1_pcode__onset") # geo to data join vars: LHS = sf, RHS = data
+    join_by = c("pcode" = "adm1_pcode__notif") # geo to data join vars: LHS = sf, RHS = data
   ),
   geo_layer(
     layer_name = "Health Zone",
-    sf = adm2_nk,
+    sf = app_data$admin_data$adm2,
     name_var = "adm2_name",
     pop_var = "adm2_pop",
-    join_by = c("pcode" = "adm2_pcode__onset")
+    join_by = c("pcode" = "adm2_pcode__notif")
   ),
   geo_layer(
     layer_name = "Health Area",
-    sf = adm3_nk,
+    sf = app_data$admin_data$adm3,
     name_var = "adm3_name",
-    join_by = c("pcode" = "adm3_pcode__onset")
+    join_by = c("pcode" = "adm3_pcode__notif")
   )
 )
 

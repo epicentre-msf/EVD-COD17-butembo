@@ -1,13 +1,14 @@
-# utils
-
 #* EXPORTING ------------------------------
-
-# the dir_ls regexps in 0_global.R match on this
-export_prefix <- "BUT-EVD_BUTEMBO"
 
 # stamp is passed in, so every dataset of one run carries the same one.
 # dir is created first: on synced storage it may not be there yet
-export_clean <- function(x, name, stamp, dir = butembo_project_clean_data_path) {
+export_clean <- function(
+  x,
+  export_prefix,
+  name,
+  stamp,
+  dir = butembo_project_clean_data_path
+) {
   fs::dir_create(dir)
   saveRDS(
     x,
@@ -40,7 +41,11 @@ latest_clean <- function(name, dir = butembo_project_clean_data_path) {
 
 # adm files change rarely; prefer the local copy 1_prep_data.R writes and
 # only fall back to SharePoint (sharepoint_dir) when no cache exists yet
-read_geo_cached <- function(file, local_dir = local_geobase_dir, sharepoint_dir = sf_data_path) {
+read_geo_cached <- function(
+  file,
+  local_dir = local_geobase_dir,
+  sharepoint_dir = sf_data_path
+) {
   local_path <- fs::path(local_dir, file)
   if (fs::file_exists(local_path)) {
     readRDS(local_path)
@@ -54,7 +59,9 @@ read_geo_cached <- function(file, local_dir = local_geobase_dir, sharepoint_dir 
 latest_clean_cached <- function(name, local_dir = local_ll_dir) {
   tryCatch(
     latest_clean(name, dir = local_dir),
-    error = function(e) latest_clean(name, dir = butembo_project_clean_data_path)
+    error = function(e) {
+      latest_clean(name, dir = butembo_project_clean_data_path)
+    }
   )
 }
 
