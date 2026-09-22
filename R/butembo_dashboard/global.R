@@ -68,10 +68,10 @@ group_vars <- c(
 # ! Modules ----------------------------
 
 # value boxes module
-source(here::here("R", "butembo_dashboard", "mod_vb.R"))
+source("mod_vb.R")
 
 # serve www/ (logos, stylesheet) to the browser
-addResourcePath("assets", here::here("R", "butembo_dashboard", "www"))
+addResourcePath("assets", "www")
 
 #* Color Palettes  -----------------------
 
@@ -85,3 +85,9 @@ evd_status_cols <- c(
 )
 
 evd_pal <- unname(evd_status_cols[c("Confirmed", "Probable")])
+
+# https://apps.epicentre-msf.org/testing/
+# docker run --rm -p 5858:3838 \
+#     -v /home/epicentre/EVD-COD17-butembo/R/butembo_dashboard:/root/app \
+#     bvd-app \
+#     R -e "shiny::runApp('/root/app', port = 3838, host = '0.0.0.0')"

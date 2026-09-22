@@ -52,6 +52,7 @@ server <- function(input, output, session) {
     df = filter_data$df,
     geo_data = geo_data,
     group_vars = group_vars,
+    base_maps = c("CartoDB.Voyager", "CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT"),
     time_filter = bar_click,
     filter_info = filter_data$filter_info
   )
