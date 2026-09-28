@@ -19,6 +19,7 @@ ll_beni_raw <- rio::import(
 #* Clean and standardise the LL ------------------------------
 
 ll_beni_clean <- ll_beni_raw |>
+
   #! keep only the confirmed cases - 285 confirmed cases
   filter(epi_class == "Confirmé") |>
 

@@ -40,6 +40,15 @@ adm1 <- readRDS(fs::path(local_geobase_dir, "COD_adm1.rds"))
 adm2 <- readRDS(fs::path(local_geobase_dir, "COD_adm2.rds"))
 adm3 <- readRDS(fs::path(local_geobase_dir, "COD_adm3.rds"))
 
+# drop geometry
+adm1_nosf <- adm1 |> st_drop_geometry() |> select(adm1_name, adm1_pcode)
+adm2_nosf <- adm2 |>
+  st_drop_geometry() |>
+  select(adm1_name, adm2_name, adm2_pcode)
+adm3_nosf <- adm3 |>
+  st_drop_geometry() |>
+  select(adm1_name, adm2_name, adm3_name, adm3_pcode, adm2_pcode)
+
 #* Import data -----------------------------
 ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
   as_tibble() |>
@@ -211,39 +220,41 @@ ll_narr_clean <- ll_narr |>
     death_place = factor(death_place, levels = c("CTE/CT", "Community"))
   ) |>
 
+  # Admin level code
   # ! # Standardise the admin levels - this makes file super large and laggy
-  # # ! ONSET
-  # left_join(
-  #   select(adm1, adm1_name, adm1_pcode__onset = adm1_pcode),
-  #   join_by(adm1_name__onset == adm1_name)
-  # ) |>
-  # left_join(
-  #   select(adm2, adm2_name, adm2_pcode__onset = adm2_pcode),
-  #   join_by(adm2_name__onset == adm2_name)
-  # ) |>
-  # left_join(
-  #   select(adm3, adm3_name, adm3_pcode__onset = adm3_pcode, adm2_pcode),
-  #   join_by(adm2_pcode__onset == adm2_pcode, adm3_name__onset == adm3_name)
-  # ) |>
+  # ! ONSET
+  left_join(
+    select(adm1_nosf, adm1_name, adm1_pcode__onset = adm1_pcode),
+    join_by(adm1_name__onset == adm1_name)
+  ) |>
+  left_join(
+    select(adm2_nosf, adm2_name, adm2_pcode__onset = adm2_pcode),
+    join_by(adm2_name__onset == adm2_name)
+  ) |>
+  left_join(
+    select(adm3_nosf, adm3_name, adm3_pcode__onset = adm3_pcode, adm2_pcode),
+    join_by(adm2_pcode__onset == adm2_pcode, adm3_name__onset == adm3_name)
+  ) |>
 
-  # # ! NOTIFICATION
-  # left_join(
-  #   select(adm1, adm1_name, adm1_pcode__notif = adm1_pcode),
-  #   join_by(adm1_name__notif == adm1_name)
-  # ) |>
-  # left_join(
-  #   select(adm2, adm2_name, adm2_pcode__notif = adm2_pcode),
-  #   join_by(adm2_name__notif == adm2_name)
-  # ) |>
-  # left_join(
-  #   select(adm3, adm3_name, adm3_pcode__notif = adm3_pcode, adm2_pcode),
-  #   join_by(adm3_name__notif == adm3_name, adm2_name__notif == adm2_pcode)
-  # ) |>
-  # # ! COMPTABILISATION
-  # left_join(
-  #   select(adm2, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
-  #   join_by(adm2_comptabilisation == adm2_name)
-  # ) |>
+  # ! NOTIFICATION
+  left_join(
+    select(adm1_nosf, adm1_name, adm1_pcode__notif = adm1_pcode),
+    join_by(adm1_name__notif == adm1_name)
+  ) |>
+  left_join(
+    select(adm2_nosf, adm2_name, adm2_pcode__notif = adm2_pcode),
+    join_by(adm2_name__notif == adm2_name)
+  ) |>
+  left_join(
+    select(adm3_nosf, adm3_name, adm3_pcode__notif = adm3_pcode, adm2_pcode),
+    join_by(adm3_name__notif == adm3_name, adm2_pcode__notif == adm2_pcode)
+  ) |>
+  # ! COMPTABILISATION
+  left_join(
+    select(adm2_nosf, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
+    join_by(adm2_comptabilisation == adm2_name)
+  ) |>
+
   rename(pid = patient_site_id) |>
   select(-c(community_death, dead_upon_arrival)) |>
   mutate(id_key = str_squish(paste(pid, nom))) |>
@@ -356,7 +367,7 @@ cli::cli_alert_info(
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
 
-export_clean(hf_visits, "hf-visits", time_write, dir = local_hf_dir)
+#export_clean(hf_visits, "hf-visits", time_write, dir = local_hf_dir)
 
 #* Prepare dashboard data -------------------------------------------
 

@@ -1,43 +1,5 @@
 # app server
 server <- function(input, output, session) {
-  # "Positive cases" tab: confirmed line list, latest notifications first
-  output$summary_table <- DT::renderDT({
-    but_ll_conf |>
-      select(
-        unique_id,
-        isolation_site_id,
-        patient_name,
-        date_notification,
-        date_symptom_onset,
-        type_of_exit
-      ) |>
-      arrange(desc(date_notification)) |>
-      DT::datatable(
-        rownames = FALSE,
-        # "compact" tightens row padding; smaller font fits more rows on screen
-        class = "compact stripe hover row-border",
-        colnames = c(
-          "Epi ID" = "unique_id",
-          "Health structure" = "isolation_site_id",
-          "Name" = "patient_name",
-          "Notification" = "date_notification",
-          "Symptom onset" = "date_symptom_onset",
-          "Outcome" = "type_of_exit"
-        ),
-        filter = "top",
-        options = list(
-          order = list(list(3, "desc")), # default sort: Notification, latest first
-          pageLength = 25,
-          lengthMenu = list(c(25, 50, 100, -1), c("25", "50", "100", "All")),
-          scrollX = TRUE,
-          initComplete = DT::JS(
-            "function(settings, json) {",
-            "  $(this.api().table().container()).css({'font-size': '0.8em'});",
-            "}"
-          )
-        )
-      )
-  })
   filter_data <- filter_server(
     id = "filter",
     df = but_ll,
@@ -52,7 +14,12 @@ server <- function(input, output, session) {
     df = filter_data$df,
     geo_data = geo_data,
     group_vars = group_vars,
-    base_maps = c("CartoDB.Voyager", "CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT"),
+    base_maps = c(
+      "CartoDB.Voyager",
+      "CartoDB.Positron",
+      "OpenStreetMap",
+      "OpenStreetMap.HOT"
+    ),
     time_filter = bar_click,
     filter_info = filter_data$filter_info
   )
@@ -105,9 +72,10 @@ server <- function(input, output, session) {
   }) |>
     bindEvent(TRUE, once = TRUE)
 
-  # zoom the map to the Butembo / Katwa extent once it is initialised
-  # (map_zoom fires when leaflet first reports its view).
-  nk_bbox <- sf::st_bbox(app_data$admin_data$adm2)
+  nk_bbox <- sf::st_bbox(app_data$admin_data$adm2[
+    app_data$admin_data$adm2 %in% c("Butembo", "Katwa")
+  ])
+
   observe({
     leaflet::leafletProxy("map-map", session) |>
       leaflet::fitBounds(
