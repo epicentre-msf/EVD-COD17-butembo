@@ -8,9 +8,12 @@
 
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- FALSE
+# degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
+GEO_SIMPLIFY_TOL <- 0.0005
 
 #* Load packages ---------------------------
 source(here::here("R", "0_global.R"))
+source(here::here("R", "fn_quality.R"))
 
 #* Path ------------------------------------
 time_write <- time_stamp()
@@ -392,6 +395,11 @@ hf_visits <- ll_narr_clean |>
       "UCG",
       hf_name
     ),
+    # initials for the dashboard timeline, e.g. "CH La Guerison" -> "CLG"
+    hf_abbr = purrr::map_chr(
+      str_split(hf_name, "\\s+"),
+      \(w) paste(str_to_upper(str_sub(w, 1, 1)), collapse = "")
+    ),
     across(c(date_start_HF_visited, date_end_HF_visited), as.Date),
     # raw export typo: 2030-05-26 entered for 2026-05-30
     across(
@@ -444,13 +452,60 @@ adm2 <- adm2 |>
 adm3 <- adm3 |>
   filter(adm3_pcode %in% adm3_pcode_used)
 
+# the app draws on a web basemap, so it needs lon/lat; done once here
+prep_app_layer <- function(x) {
+  x <- st_transform(x, 4326)
+  if (GEO_SIMPLIFY_TOL > 0) {
+    x <- st_simplify(x, dTolerance = GEO_SIMPLIFY_TOL, preserveTopology = TRUE)
+  }
+  x
+}
+adm1 <- prep_app_layer(adm1)
+adm2 <- prep_app_layer(adm2)
+adm3 <- prep_app_layer(adm3)
+
+#* Data-quality tables (Data quality tab) ----------------------------------
+quality <- build_quality(ll_narr_clean)
+
+# variables with no section, or beyond the first two HF slots, are not shown
+n_quality_hidden <- length(setdiff(
+  setdiff(names(ll_narr_clean), QUALITY_EXCLUDE_VARS),
+  quality$completeness$variable
+))
+cli::cli_alert_info(
+  "{nrow(quality$completeness)} variables in the completeness table, \\
+   {n_quality_hidden} left out (no section or excluded)"
+)
+
+# dates the delay module pairs up, chronological so delays come out positive
+delay_dates <- c(
+  "date_symptom_onset",
+  "date_notification",
+  "date_admission_eff",
+  "date_lab_result_1",
+  "date_exit_eff"
+)
+
+# structures the FOSA layer cannot locate are absent; the app counts them
+hf_geo <- hf_match_geo(hf_visits, hf)
+
+n_hf_visited <- hf_visits |>
+  filter(!is.na(hf_name)) |>
+  distinct(hf_name, hf_as) |>
+  nrow()
+
+cli::cli_alert_info(
+  "{nrow(hf_geo)} of {n_hf_visited} visited structures located in the FOSA layer"
+)
+
 #* Save to server ------------------------------------------------------
 # app_data.rds feeds the evd-2026-app dashboard on episerv
 app_data <- list(
-  linelist = ll_narr_clean,
+  linelist = add_delay_pairs(ll_narr_clean, delay_dates),
+  quality = quality,
   hf_visits = hf_visits,
-  # only the columns the facilities module matches and maps on
-  hf_geo = hf |> select(name, short_name, adm3_name),
+  # matched here so the dashboard needs no string-matching packages
+  hf_geo = hf_geo,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
 

@@ -303,6 +303,15 @@ get_delay_df <- function(dat, date_vars, group_var = NULL) {
   # Get all unique pairs of date variables
   date_combinations <- combn(date_vars, 2, simplify = FALSE)
 
+  # prep already saved these columns (add_delay_pairs in R/utils.R)
+  pair_cols <- purrr::map_chr(
+    date_combinations,
+    \(d) paste0(d[[1]], "__", d[[2]])
+  )
+  if (all(pair_cols %in% names(dat))) {
+    return(dplyr::select(dat, dplyr::all_of(c(pair_cols, group_var))))
+  }
+
   dat <- dat |>
     # Ensure dates are in Date format - or ask for it to be date ?
     dplyr::mutate(dplyr::across(dplyr::all_of(date_vars), as.Date))

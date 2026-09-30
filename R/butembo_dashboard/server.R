@@ -84,7 +84,7 @@ server <- function(input, output, session) {
     adm3 = app_data$admin_data$adm3
   )
 
-  mod_quality_server("quality", df = but_ll)
+  mod_quality_server("quality", quality = quality)
 
   # epishiny 0.1.0 has no default-date arg, so set it once on startup
   observe({

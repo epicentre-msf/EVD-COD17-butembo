@@ -104,7 +104,7 @@ ui <- page_navbar(
     value = "lab"
   ),
 
-  mod_quality_ui("quality", but_ll),
+  mod_quality_ui("quality", quality),
 
   nav_spacer(),
   nav_item(

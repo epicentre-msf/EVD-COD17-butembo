@@ -27,6 +27,9 @@ but_ll <- app_data$linelist
 hf_visits <- app_data$hf_visits
 hf_geo <- app_data$hf_geo
 
+# completeness and geo-match tables, built in prep for the Data quality tab
+quality <- app_data$quality
+
 #* Geo data ------------------------------------------------
 
 geo_data <- list(

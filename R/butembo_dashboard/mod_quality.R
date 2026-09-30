@@ -1,18 +1,12 @@
 # Data quality tab: variable completeness and admin-name-to-pcode match
-# rate for residence/onset/notification, computed live from the linelist -
-# unlike the rest of the dashboard, not filtered by the sidebar or period.
+# rate for residence/onset/notification. Tables are built in prep
+# (R/fn_quality.R, saved as app_data$quality); this module only renders them.
+# Unlike the rest of the dashboard, not filtered by the sidebar or period.
 #
 # Tables use reactable, matching evd-2026-app's mod_completeness.R /
 # mod_geo_precision.R as closely as this simpler, single-linelist dashboard
 # allows: collapsible section rows with an averaged aggregate, the same
 # colour ramps, a Rows (Sections/Variables) toggle on the completeness table.
-
-GEO_LEVELS_Q <- c("Province" = 1L, "Health Zone" = 2L, "Health Area" = 3L)
-GEO_LOC_TYPES <- c(res = "Residence", onset = "Onset", notif = "Notification")
-
-# identifiers/free text excluded from the completeness table - not
-# analytical variables
-QUALITY_EXCLUDE_VARS <- c("unique_id", "nom", "phone_number")
 
 # geo precision severity ramp - exact copy of evd-2026-app's GEO_RAMP_*
 # (mod_geo_precision.R): amber->red, interpolated in Lab space by shortfall
@@ -28,102 +22,6 @@ GEO_RAMP_FN <- grDevices::colorRamp(GEO_RAMP_COLS, space = "Lab")
 COMPLETENESS_RAMP <- c("#edf8e9", "#bae4b3", "#74c476", "#31a354", "#006d2c")
 COMPLETENESS_RAMP_FG <- c("#212529", "#212529", "#212529", "#ffffff", "#ffffff")
 COMPLETENESS_DASH_COLOR <- "#71797E"
-
-# hand-built variable -> section mapping. evd-2026-app sources this from an
-# Excel data dictionary; Butembo has no such dictionary, so this is
-# maintained here instead - unmapped variables fall into "Other" rather than
-# erroring, so a new/renamed column never breaks the table.
-QUALITY_SECTION_ORDER <- c(
-  "Identification",
-  "Demographics",
-  "Dates and delays",
-  "Clinical",
-  "Laboratory",
-  "Transmission link",
-  "Exposure",
-  "Surveillance",
-  "Location - residence",
-  "Location - onset",
-  "Location - notification",
-  "Vaccination",
-  "Health Facilities",
-  "Symptoms"
-)
-
-# guessed column names are flagged inline - check these against the real
-# linelist and adjust if they don't match
-quality_section <- function(v) {
-  dplyr::case_when(
-    v %in% c(
-      "pid", "EVD_status", "id_msf", "id_msf_2", "adm2_pcode__comptabilisation"
-    ) ~
-      "Identification",
-    v %in% c(
-      "sex", "age", "age_raw", "age_unit", "age_group", "job", "hcw",
-      "pregnant" # guessed column name - confirm
-    ) ~
-      "Demographics",
-    # health-facility-visit dates are their own section below, checked before
-    # the generic date_/delay_ pattern so they aren't caught here instead
-    grepl("^(HF_name_visited_|date_(start|end)_HF_visited_)[12]$", v) ~
-      "Health Facilities",
-    v %in% c(
-      "pain_eyes_sensitivity_light", "bleeding_urine", "jaundice",
-      "bleeding_vomito_negro", "skin_rash", "hichups", "sorethroat",
-      "bleeding_vomit", "bleeding_vagina", "conjunctivitis",
-      "confused_disoriented", "bleeding_injection_site",
-      "bleeding_epistaxis", "breastfeeding", "temp",
-      "hematomes_petechies_purpura", "bleeding_gum", "swallowing_problem",
-      "bleeding_melenas", "coma", "chest_pain", "breathlessness", "cough",
-      "bone_muscle_pain", "joint_pain", "bleeding", "abdominal_pain",
-      "diarrhoea", "headache", "loss_of_appetite", "nausea",
-      "asthenia_weakness", "fever"
-    ) ~
-      "Symptoms",
-    v %in% c(
-      "date_symptom_onset", "date_notification", "date_admission_eff",
-      "date_exit_eff"
-    ) |
-      grepl("^delay_", v) ~
-      "Dates and delays",
-    v %in% c(
-      "dead_upon_notif", "isolated_etc", "etc_site", "death_place",
-      "type_of_exit", "outcome"
-    ) ~
-      "Clinical",
-    v %in% c(
-      paste0("lab_id_", 1:2),
-      paste0("date_lab_result_", 1:2),
-      paste0("lab_result_", 1:2),
-      paste0("date_lab_sample_", 1:2),
-      paste0("sample_type_", 1:2),
-      paste0("lab_provenance_", 1:2)
-    ) ~
-      "Laboratory",
-    v %in% c("transmission_type_1", "infector_id_1", "infector_name_1") ~
-      "Transmission link",
-    v %in% c(
-      "contact_non_human", "contact_funeral_body", "contact_EVD_objects",
-      "contact_EVD_body_fluids", "contact_EVD_physical", "contact_EVD_house",
-      "contact_tradi", "contact_travel", "contact_HF", "contact_funeral",
-      "contact_EVD_case"
-    ) ~
-      "Exposure",
-    v %in% c(
-      "narratif", # guessed column name - confirm
-      "infection_butembo", "contact_tracing_followed_yn",
-      "contact_tracing_known_yn"
-    ) ~
-      "Surveillance",
-    grepl("__res$", v) ~ "Location - residence",
-    grepl("__onset$", v) ~ "Location - onset",
-    grepl("adm", v, ignore.case = TRUE) & grepl("__notif$", v) ~
-      "Location - notification",
-    v %in% c("vaccination_rvsv_yn", "year_vaccination_rvsv") ~
-      "Vaccination",
-    .default = NA_character_ # unmatched variables are dropped, not shown
-  )
-}
 
 # muted explainer block above a table, bullets with bold terms - mirrors
 # GEO_SUMMARY_EXPLAINER / GEO_UNMATCHED_EXPLAINER's style in evd-2026-app
@@ -147,12 +45,12 @@ rt_theme <- function(size = c("regular", "compact"), cell_padding = NULL) {
   )
 }
 
-# mod_quality_ui/server take the static, unfiltered linelist directly (not a
-# reactive) - like evd-2026-app's ll_completeness/ll_geo_matching, this tab
-# is independent of the dashboard's sidebar/period filters
-mod_quality_ui <- function(id, df) {
+
+# mod_quality_ui/server take the pre-built quality tables (a plain list, not a
+# reactive) - this tab is independent of the dashboard's sidebar/period filters
+mod_quality_ui <- function(id, quality) {
   ns <- NS(id)
-  n_unmatched <- nrow(geo_unmatched(df))
+  n_unmatched <- nrow(quality$unmatched)
 
   nav_panel(
     title = tags$span(bsicons::bs_icon("clipboard2-check"), "Data quality"),
@@ -256,10 +154,10 @@ mod_quality_ui <- function(id, df) {
   )
 }
 
-mod_quality_server <- function(id, df) {
+mod_quality_server <- function(id, quality) {
   moduleServer(id, function(input, output, session) {
     output$completeness_table <- reactable::renderReactable({
-      df_tbl <- completeness_table(df)
+      df_tbl <- quality$completeness
       # first variable of each section stands in for the section's group row
       # while expanded (see the aggregated cell renderers below), so its own
       # leaf row is hidden via rowStyle rather than shown twice
@@ -333,7 +231,7 @@ mod_quality_server <- function(id, df) {
     })
 
     output$geo_summary_table <- reactable::renderReactable({
-      wide <- geo_match_summary_wide(df)
+      wide <- quality$geo_summary
       pct_cols <- setdiff(names(wide), "Location")
       pct_col_defs <- stats::setNames(
         lapply(pct_cols, function(cn) reactable::colDef(cell = geo_pct_cell)),
@@ -354,7 +252,7 @@ mod_quality_server <- function(id, df) {
     })
 
     output$geo_unmatched_table <- reactable::renderReactable({
-      u <- unmatched_display(df)
+      u <- quality$unmatched
       reactable::reactable(
         u,
         groupBy = "Location",
@@ -373,7 +271,7 @@ mod_quality_server <- function(id, df) {
     output$download_unmatched <- shiny::downloadHandler(
       filename = function() paste0("unmatched-locations-", Sys.Date(), ".csv"),
       content = function(file) {
-        utils::write.csv(unmatched_display(df), file, row.names = FALSE)
+        utils::write.csv(quality$unmatched, file, row.names = FALSE)
       }
     )
   })
@@ -437,98 +335,4 @@ geo_pct_cell <- function(value) {
     title = sprintf("Exact value: %.1f%%", value),
     sprintf("%.0f%%", value)
   )
-}
-
-# trailing test number (1/2/3) for Laboratory variables, so they order by
-# test rather than by completeness
-lab_test_num <- function(v) as.integer(sub(".*_([12])$", "\\1", v))
-
-# category rank so each test slot reads lab_id -> result -> sample ->
-# provenance -> date, left to right
-lab_category_rank <- function(v) {
-  dplyr::case_when(
-    grepl("lab_id", v, ignore.case = TRUE) ~ 1L,
-    grepl("result", v, ignore.case = TRUE) ~ 2L,
-    grepl("sample", v, ignore.case = TRUE) ~ 3L,
-    grepl("provenance", v, ignore.case = TRUE) ~ 4L,
-    grepl("date", v, ignore.case = TRUE) ~ 5L,
-    .default = 6L
-  )
-}
-
-# % complete per variable, across the whole linelist, grouped into sections
-completeness_table <- function(dd) {
-  vars <- setdiff(names(dd), QUALITY_EXCLUDE_VARS)
-  # only the first two health-facility-visit repeat-group slots are shown
-  vars <- vars[!grepl("^(HF_name_visited_|date_(start|end)_HF_visited_)[3-9]", vars)]
-  n <- nrow(dd)
-  tbl <- tibble::tibble(
-    section = factor(quality_section(vars), levels = QUALITY_SECTION_ORDER),
-    variable = vars,
-    pct_complete = vapply(vars, \(v) 100 * sum(!is.na(dd[[v]])) / n, numeric(1))
-  )
-  # variables that don't match any named section are dropped, not bucketed
-  # into an "Other" section - factor() already turned them to NA since
-  # "Other" isn't in QUALITY_SECTION_ORDER
-  tbl <- dplyr::filter(tbl, !is.na(section))
-  is_lab <- tbl$section == "Laboratory"
-  tbl$lab_test_num <- NA_integer_
-  tbl$lab_category_rank <- NA_integer_
-  tbl$lab_test_num[is_lab] <- lab_test_num(tbl$variable[is_lab])
-  tbl$lab_category_rank[is_lab] <- lab_category_rank(tbl$variable[is_lab])
-  tbl |>
-    dplyr::arrange(section, lab_test_num, lab_category_rank, pct_complete) |>
-    dplyr::select(section, variable, pct_complete)
-}
-
-# one row per location type, paired "recorded %"/"matched %" columns per
-# admin level - recorded = name non-missing, matched = name resolved to a
-# pcode, both out of all rows (not just the recorded ones)
-geo_match_summary_wide <- function(d) {
-  n_all <- nrow(d)
-  purrr::map_dfr(names(GEO_LOC_TYPES), function(lt) {
-    row <- list(Location = GEO_LOC_TYPES[[lt]])
-    for (lvl_lab in names(GEO_LEVELS_Q)) {
-      lvl <- GEO_LEVELS_Q[[lvl_lab]]
-      name_col <- paste0("adm", lvl, "_name__", lt)
-      pcode_col <- paste0("adm", lvl, "_pcode__", lt)
-      rec_lab <- paste0(lvl_lab, " recorded %")
-      match_lab <- paste0(lvl_lab, " matched %")
-      if (!all(c(name_col, pcode_col) %in% names(d))) {
-        row[[rec_lab]] <- NA_real_
-        row[[match_lab]] <- NA_real_
-        next
-      }
-      recorded <- !is.na(d[[name_col]])
-      matched <- recorded & !is.na(d[[pcode_col]])
-      row[[rec_lab]] <- 100 * sum(recorded) / n_all
-      row[[match_lab]] <- 100 * sum(matched) / n_all
-    }
-    tibble::as_tibble(row)
-  })
-}
-
-# distinct recorded names that never resolved to a pcode, most frequent first
-geo_unmatched <- function(d) {
-  purrr::map_dfr(names(GEO_LOC_TYPES), function(lt) {
-    purrr::map_dfr(names(GEO_LEVELS_Q), function(lvl_lab) {
-      lvl <- GEO_LEVELS_Q[[lvl_lab]]
-      name_col <- paste0("adm", lvl, "_name__", lt)
-      pcode_col <- paste0("adm", lvl, "_pcode__", lt)
-      if (!all(c(name_col, pcode_col) %in% names(d))) {
-        return(NULL)
-      }
-      d |>
-        dplyr::filter(!is.na(.data[[name_col]]), is.na(.data[[pcode_col]])) |>
-        dplyr::count(raw_name = .data[[name_col]], name = "n") |>
-        dplyr::mutate(group = paste0(GEO_LOC_TYPES[[lt]], " – ", lvl_lab)) |>
-        dplyr::arrange(dplyr::desc(n)) |>
-        dplyr::select(group, raw_name, n)
-    })
-  })
-}
-
-unmatched_display <- function(d) {
-  geo_unmatched(d) |>
-    dplyr::rename(Location = group, `Recorded name` = raw_name, `N rows` = n)
 }

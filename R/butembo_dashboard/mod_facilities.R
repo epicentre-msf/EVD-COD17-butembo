@@ -44,7 +44,7 @@ hc_count_bars <- function(x, title, x_lab) {
 mod_facilities_ui <- function(id) {
   ns <- shiny::NS(id)
 
-  pkg_deps <- c("sf", "mapgl", "reactable", "highcharter", "stringdist")
+  pkg_deps <- c("sf", "mapgl", "reactable", "highcharter")
   if (!rlang::is_installed(pkg_deps)) {
     rlang::check_installed(pkg_deps, reason = "to use the facilities module.")
   }
@@ -119,25 +119,6 @@ mod_facilities_ui <- function(id) {
 mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
   shiny::moduleServer(id, function(input, output, session) {
     suppressMessages(sf::sf_use_s2(FALSE))
-
-    # FOSA layer and structure -> layer row lookup depend on no filter: build once
-    hf_ref <- hf_geo |>
-      sf::st_transform(4326) |>
-      hf_prepare_ref()
-
-    hf_lookup <- hf_visits |>
-      dplyr::filter(!is.na(hf_name)) |>
-      dplyr::distinct(hf_name, hf_as) |>
-      dplyr::mutate(
-        ref_row = purrr::map2_int(
-          hf_name,
-          hf_as,
-          \(x, y) hf_match_idx(x, y, hf_ref)
-        )
-      )
-
-    adm2_4326 <- sf::st_transform(adm2, 4326)
-    adm3_4326 <- sf::st_transform(adm3, 4326)
 
     # windows end on the latest notification, as the period filter does
     anchor <- shiny::reactive({
@@ -224,21 +205,15 @@ mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
     map_points <- shiny::reactive({
       d <- top()
       n_top <- nrow(d)
-      d <- dplyr::left_join(
+      # hf_geo holds only the structures located in prep
+      d <- dplyr::inner_join(
+        hf_geo,
         d,
-        hf_lookup,
         by = dplyr::join_by(hf_name, hf_as),
-        relationship = "many-to-one"
+        relationship = "one-to-many"
       )
-      stopifnot(nrow(d) == n_top)
+      stopifnot(nrow(d) <= n_top)
       d |>
-        dplyr::filter(!is.na(ref_row)) |>
-        (\(x) {
-          sf::st_sf(
-            x[c("hf_name", "hf_as", "hf_zs", "total", "j7", "j14", "j21")],
-            geometry = sf::st_geometry(hf_ref)[x$ref_row]
-          )
-        })() |>
         dplyr::mutate(
           tooltip_html = paste0(
             "<b>", hf_name, "</b><br>", hf_as, " | ", hf_zs,
@@ -253,17 +228,17 @@ mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
 
       m <- mapgl::maplibre(
         style = mapgl::carto_style("voyager"),
-        bounds = sf::st_bbox(adm3_4326),
+        bounds = sf::st_bbox(adm3),
         attributionControl = FALSE
       ) |>
-        mapgl::add_source(id = "adm3", data = adm3_4326) |>
+        mapgl::add_source(id = "adm3", data = adm3) |>
         mapgl::add_line_layer(
           id = "adm3_line",
           source = "adm3",
           line_color = "#9a9a9a",
           line_width = 1
         ) |>
-        mapgl::add_source(id = "adm2", data = adm2_4326) |>
+        mapgl::add_source(id = "adm2", data = adm2) |>
         mapgl::add_line_layer(
           id = "adm2_line",
           source = "adm2",
@@ -450,10 +425,7 @@ mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
             .default = date_start_HF_visited + 1
           ),
           # initials, e.g. "CH La Guerison" -> "CLG"
-          abbr = purrr::map_chr(
-            stringr::str_split(hf_name, "\\s+"),
-            \(w) paste(toupper(substr(w, 1, 1)), collapse = "")
-          )
+          abbr = hf_abbr
         )
 
       list(cases = cases, visits = visits)
