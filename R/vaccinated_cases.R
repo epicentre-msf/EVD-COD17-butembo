@@ -305,8 +305,11 @@ rio::export(
 )
 
 #* Exploratory: confirmed in kit_ll but no kit_id in ll_clean ----
-kit_confirmed_missing <- kit_ll |>
-  filter(str_detect(EVD_status, "Confirm")) |>
+kit_confirmed <- kit_ll |>
+  filter(str_detect(EVD_status, "Confirm"))
+
+kit_confirmed_missing <- kit_confirmed |>
+  filter(isolation_site_id == "CTE Kitatumba | Kyangike | Butembo") |>
   anti_join(
     filter(ll_clean, !is.na(kit_id)),
     by = join_by(patient_site_id == kit_id)
@@ -321,7 +324,8 @@ kit_confirmed_missing <- kit_ll |>
     adm3_name__res
   )
 
-cli::cli_inform(
-  "{nrow(kit_confirmed_missing)} confirmed kit_ll case{?s} with no kit_id in ll_clean"
-)
+cli::cli_inform(c(
+  "{sum(kit_confirmed$isolation_site_id == 'CTE Kitatumba | Kyangike | Butembo', na.rm = TRUE)} of {nrow(kit_confirmed)} confirmed kit_ll case{?s} at the Kitatumba site",
+  "{nrow(kit_confirmed_missing)} of those with no kit_id in ll_clean"
+))
 print(kit_confirmed_missing, n = Inf)
