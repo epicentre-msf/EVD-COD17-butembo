@@ -1,6 +1,8 @@
 # ! Script of the patient HF travels (parcours de soins avant isolement)
 
 source(here::here("R", "0_global.R"))
+# shared with the dashboard's Health facilities tab
+source(here::here("R", "butembo_dashboard", "fn_facilities.R"))
 pos_data_clean <- readRDS(latest_narr_ll_clean)
 date_report <- clean_file_date(latest_narr_ll_clean) # export date stamp
 
@@ -144,41 +146,15 @@ ggsave(
 # début de visite) dans la fenêtre, ancrée sur la date du rapport et cumulative
 # (7 j inclus dans 14 j inclus dans 21 j). CTE exclus : ils reçoivent les cas
 # confirmés, hors parcours de soins pré-isolement.
-cte_exclude <- c("HGR Kitatumba", "HGR Katwa", "HGR Matanda")
-
-n_seen <- function(patient, date, n) {
-  idx <- !is.na(date) & date >= date_report - (n - 1) & date <= date_report
-  n_distinct(patient[idx])
-}
-
-hf_recent <- hf_visits |>
-  filter(!hf_name %in% cte_exclude) |>
-  summarise(
-    .by = c(hf_name, hf_as, hf_zs),
-    # total de cas ayant transité par la structure (toutes dates)
-    total = n_distinct(patient_name),
-    j7 = n_seen(patient_name, date_start_HF_visited, 7),
-    j14 = n_seen(patient_name, date_start_HF_visited, 14),
-    j21 = n_seen(patient_name, date_start_HF_visited, 21)
-  ) |>
-  filter(j21 > 0) |>
-  arrange(desc(total), desc(j21), desc(j14), desc(j7)) |>
-  slice_head(n = 15)
+hf_recent <- hf_top_structures(
+  hf_visits,
+  anchor = date_report,
+  id_col = "patient_name"
+)
 
 # dégradé de couleur partagé par les trois colonnes de comptage
 case_ramp <- c("#ffffff", "#fd7e14")
 dom_seen <- c(0, max(hf_recent$j21))
-
-ramp_style <- function(ramp, domain) {
-  pal <- scales::colour_ramp(ramp)
-  function(value) {
-    if (is.null(value) || is.na(value)) {
-      return(list())
-    }
-    frac <- max(0, min(1, (value - domain[1]) / (domain[2] - domain[1])))
-    list(background = pal(frac))
-  }
-}
 
 hf_theme <- reactable::reactableTheme(
   style = list(fontSize = "0.82rem"),
@@ -248,58 +224,10 @@ hf_recent_panel |>
 # Rapproche chaque structure du tableau de la couche FOSA géolocalisée (hf) :
 # correspondance approximative (Jaro-Winkler) au sein de la même aire de santé,
 # complétée par une table de correspondance manuelle pour les cas particuliers.
-norm_hf <- function(x) {
-  x |>
-    str_to_lower() |>
-    stringi::stri_trans_general("Latin-ASCII") |>
-    str_replace_all("[^a-z0-9 ]", " ") |>
-    str_squish()
-}
-# retire le préfixe de type (CH, CS, Disp, HGR, …) pour comparer le nom propre
-strip_hf_type <- function(x) {
-  str_squish(str_remove(
-    x,
-    "^(ch|cs|cm|csr|ps|disp|dispensaire|centre hospitalier|centre de sante|centre medico naturel|hgr|hopital general de reference|hop|poste de sante|clinique|cte|ct)\\b"
-  ))
-}
-
-# corrections manuelles : nom du tableau -> nom exact dans la couche FOSA
-hf_manual <- c("UCG" = "Cliniques Universitaires du Graben")
-
-hf_ref <- hf |>
-  mutate(
-    core = strip_hf_type(norm_hf(coalesce(short_name, name))),
-    core_full = strip_hf_type(norm_hf(name)),
-    as_n = norm_hf(adm3_name)
-  )
-
-# indice de la FOSA correspondante dans hf_ref (NA si non localisable)
-match_hf_idx <- function(hf_name, hf_as) {
-  if (hf_name %in% names(hf_manual)) {
-    hit <- which(hf_ref$name == hf_manual[[hf_name]])
-    same <- hit[hf_ref$as_n[hit] == norm_hf(hf_as)]
-    if (length(same) > 0) {
-      hit <- same
-    }
-    return(hit[1])
-  }
-  cand <- which(hf_ref$as_n == norm_hf(hf_as))
-  if (length(cand) == 0) {
-    return(NA_integer_)
-  }
-  core <- strip_hf_type(norm_hf(hf_name))
-  d <- pmin(
-    stringdist::stringdist(core, hf_ref$core[cand], method = "jw", p = 0.1),
-    stringdist::stringdist(core, hf_ref$core_full[cand], method = "jw", p = 0.1)
-  )
-  if (min(d) > 0.15) {
-    return(NA_integer_)
-  }
-  cand[which.min(d)]
-}
+hf_ref <- hf_prepare_ref(hf)
 
 hf_recent_geo <- hf_recent |>
-  mutate(ref_row = purrr::map2_int(hf_name, hf_as, match_hf_idx))
+  mutate(ref_row = purrr::map2_int(hf_name, hf_as, \(x, y) hf_match_idx(x, y, hf_ref)))
 
 n_unmapped <- sum(is.na(hf_recent_geo$ref_row))
 

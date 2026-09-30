@@ -57,6 +57,21 @@ ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
 
 n_import <- nrow(ll_narr)
 
+followup_katwa <- rio::import(investigator_followup_path, which = "katwa") |>
+  as_tibble() |>
+  clean_names() |>
+  remove_empty() |>
+  mutate(across(matches("(^|_)date(_|$)"), harmonize_dates))
+
+followup_butembo <- rio::import(
+  investigator_followup_path,
+  which = "butembo"
+) |>
+  as_tibble() |>
+  clean_names() |>
+  remove_empty() |>
+  mutate(across(matches("(^|_)date(_|$)"), harmonize_dates))
+
 #* CLEAN LINELIST --------------------------
 ll_narr_clean <- ll_narr |>
   mutate(
@@ -171,6 +186,12 @@ ll_narr_clean <- ll_narr |>
 
     across(contains("adm1"), ~ str_remove(.x, "COD ")),
 
+    # source mixes KATWA / katwa, which splits groups and breaks the zone joins
+    across(
+      c(adm2_comptabilisation, adm2_name__onset, adm2_name__notif),
+      str_to_sentence
+    ),
+
     # inferred only from a complete admission-exit pair: same day means the
     # patient never spent a night in care, so was dead at notification
     dead_upon_notif = case_when(
@@ -249,6 +270,20 @@ ll_narr_clean <- ll_narr |>
     select(adm3_nosf, adm3_name, adm3_pcode__notif = adm3_pcode, adm2_pcode),
     join_by(adm3_name__notif == adm3_name, adm2_pcode__notif == adm2_pcode)
   ) |>
+
+  # ! RESIDENCE
+  left_join(
+    select(adm1_nosf, adm1_name, adm1_pcode__res = adm1_pcode),
+    join_by(adm1_name__res == adm1_name)
+  ) |>
+  left_join(
+    select(adm2_nosf, adm2_name, adm2_pcode__res = adm2_pcode),
+    join_by(adm2_name__res == adm2_name)
+  ) |>
+  left_join(
+    select(adm3_nosf, adm3_name, adm3_pcode__res = adm3_pcode, adm2_pcode),
+    join_by(adm3_name__res == adm3_name, adm2_pcode__res == adm2_pcode)
+  ) |>
   # ! COMPTABILISATION
   left_join(
     select(adm2_nosf, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
@@ -265,6 +300,14 @@ ll_narr_clean <- ll_narr |>
 cli::cli_alert_info(
   "{nrow(ll_narr_clean)} cases kept of {n_import}: \\
    {n_import - nrow(ll_narr_clean)} outside {toString(CONFIG$filter_hz)}"
+)
+# adm3_name__res unmatched against the geobase: no pcode, so no map join
+n_res_unmatched <- with(
+  ll_narr_clean,
+  sum(!is.na(adm3_name__res) & is.na(adm3_pcode__res))
+)
+cli::cli_alert_warning(
+  "{n_res_unmatched} rows have adm3_name__res with no matching adm3_pcode__res"
 )
 cli::cli_alert_info(
   "{n_distinct(ll_narr_clean$unique_id)} unique_id across \\
@@ -375,18 +418,21 @@ cli::cli_alert_info(
 
 adm1_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm1_pcode__onset,
-  ll_narr_clean$adm1_pcode__notif
+  ll_narr_clean$adm1_pcode__notif,
+  ll_narr_clean$adm1_pcode__res
 )))
 
 adm2_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm2_pcode__onset,
   ll_narr_clean$adm2_pcode__notif,
-  ll_narr_clean$adm2_pcode__comptabilisation
+  ll_narr_clean$adm2_pcode__comptabilisation,
+  ll_narr_clean$adm2_pcode__res
 )))
 
 adm3_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm3_pcode__onset,
-  ll_narr_clean$adm3_pcode__notif
+  ll_narr_clean$adm3_pcode__notif,
+  ll_narr_clean$adm3_pcode__res
 )))
 
 adm1 <- adm1 |>
@@ -403,6 +449,8 @@ adm3 <- adm3 |>
 app_data <- list(
   linelist = ll_narr_clean,
   hf_visits = hf_visits,
+  # only the columns the facilities module matches and maps on
+  hf_geo = hf |> select(name, short_name, adm3_name),
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
 
@@ -421,3 +469,8 @@ if (SEND_TO_SERVER) {
     )
   )
 }
+
+#* Follow-up -----------------------------------------------------------
+
+followup_katwa
+followup_butembo

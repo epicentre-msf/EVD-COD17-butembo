@@ -1,23 +1,17 @@
-# Value boxes above the dashboard: confirmed cases, deaths, recoveries.
-# Mirrors evd-2026-app's mod_vb.R, cut to three boxes and no CFR panel.
+# Value boxes above the dashboard: confirmed cases, notification status,
+# MSF caseload, deaths, community deaths.
 
 mod_vb_ui <- function(id) {
   ns <- NS(id)
-  layout_column_wrap(
-    width = 1 / 3,
+  bslib::layout_columns(
+    col_widths = c(2, 2, 4, 2, 2),
     fill = FALSE,
     class = "pt-2 hgap-tight",
     value_box(
       title = vb_title_info(
         "Confirmed cases",
-        paste0(
-          "Case classification of the remaining patients:<br><br>",
-          "P. = Probable<br>",
-          "S. = Suspect"
-        ),
-        max_width = "260px",
-        # only explains the abbreviated tier, so drop it once labels spell out
-        hide_when_wide = TRUE
+        "Denominator note: counts of confirmed cases only.",
+        max_width = "260px"
       ),
       value = textOutput(ns("confirmed"), inline = TRUE),
       p(uiOutput(ns("confirmed_info"), inline = TRUE)),
@@ -26,19 +20,56 @@ mod_vb_ui <- function(id) {
       height = "85px"
     ),
     value_box(
-      title = vb_title_info("Deaths", vb_outcome_tooltip("died")),
-      value = textOutput(ns("deaths"), inline = TRUE),
-      p(uiOutput(ns("deaths_info"), inline = TRUE)),
+      title = vb_title_info(
+        "Alive at notification",
+        paste0(
+          "Confirmed cases only.<br><br>",
+          "Share alive when notified, from dead_upon_notif ",
+          "(derived - dead_upon_arrival is dropped upstream). ",
+          "Missing is the share with no recorded status."
+        )
+      ),
+      value = textOutput(ns("alive_notif"), inline = TRUE),
+      p(uiOutput(ns("alive_notif_info"), inline = TRUE)),
       showcase_layout = "left center",
-      class = "vb-accent vb-danger",
+      class = "vb-accent vb-alive",
       height = "85px"
     ),
     value_box(
-      title = vb_title_info("Recovered", vb_outcome_tooltip("recovered")),
-      value = textOutput(ns("recovered"), inline = TRUE),
-      p(uiOutput(ns("recovered_info"), inline = TRUE)),
+      title = vb_title_info(
+        "MSF confirmed patients",
+        "Confirmed cases only. Cases with a non-missing id_msf."
+      ),
+      value = textOutput(ns("msf"), inline = TRUE),
+      p(uiOutput(ns("msf_info"), inline = TRUE)),
       showcase_layout = "left center",
-      class = "vb-accent vb-success",
+      class = "vb-accent vb-msf",
+      height = "85px"
+    ),
+    value_box(
+      title = vb_title_info(
+        "Deaths",
+        paste0(
+          "Confirmed cases only.<br><br>",
+          "CFR is deaths over cases with a known outcome ",
+          "(Died or Recovered) - abandoned and unresolved exits excluded."
+        )
+      ),
+      value = textOutput(ns("deaths"), inline = TRUE),
+      p(uiOutput(ns("deaths_info"), inline = TRUE)),
+      showcase_layout = "left center",
+      class = "vb-accent vb-deaths",
+      height = "85px"
+    ),
+    value_box(
+      title = vb_title_info(
+        "Non-isolated deaths",
+        "Confirmed cases only. death_place is Community rather than CTE/CT."
+      ),
+      value = textOutput(ns("nonisolated_deaths"), inline = TRUE),
+      p(uiOutput(ns("nonisolated_deaths_info"), inline = TRUE)),
+      showcase_layout = "left center",
+      class = "vb-accent vb-nonisolated",
       height = "85px"
     )
   )
@@ -61,14 +92,33 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
           dplyr::between(.data[[tf$date_var]], tf$from, tf$to)
         )
       }
-      # all three headline figures are confirmed cases only
+      # every box below is confirmed cases only
       conf <- dplyr::filter(d, EVD_status == "Confirmed")
+      n_confirmed <- nrow(conf)
+
+      n_alive_notif <- sum(conf$dead_upon_notif == FALSE, na.rm = TRUE)
+      n_missing_notif <- sum(is.na(conf$dead_upon_notif))
+
+      n_msf <- sum(!is.na(conf$id_msf))
+
+      n_died <- sum(conf$type_of_exit == "Died", na.rm = TRUE)
+      n_recovered <- sum(conf$type_of_exit == "Recovered", na.rm = TRUE)
+
+      # unclassified place of death counts as non-isolated, so the split sums to n_died
+      n_nonisolated_deaths <- sum(
+        conf$type_of_exit == "Died" & !conf$death_place %in% "CTE/CT",
+        na.rm = TRUE
+      )
+
       list(
-        n_confirmed = nrow(conf),
+        n_confirmed = n_confirmed,
         n_probable = sum(d$EVD_status == "Probable", na.rm = TRUE),
-        n_suspect = sum(d$EVD_status == "Suspect", na.rm = TRUE),
-        n_died = sum(conf$type_of_exit == "Died", na.rm = TRUE),
-        n_recovered = sum(conf$type_of_exit == "Recovered", na.rm = TRUE)
+        n_alive_notif = n_alive_notif,
+        n_missing_notif = n_missing_notif,
+        n_msf = n_msf,
+        n_died = n_died,
+        n_recovered = n_recovered,
+        n_nonisolated_deaths = n_nonisolated_deaths
       )
     })
 
@@ -77,17 +127,37 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$confirmed_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
+        list(label = "Probable", value = scales::number(s$n_probable))
+      ))
+    })
+
+    output$alive_notif <- renderText({
+      s <- df_summary()
+      vb_pct(s$n_alive_notif, s$n_confirmed)
+    })
+
+    output$alive_notif_info <- renderUI({
+      s <- df_summary()
+      vb_stat_line(list(
         list(
-          full = "Probable:",
-          med = "Prob.",
-          short = "P.",
-          value = scales::number(s$n_probable)
+          label = "Missing",
+          value = vb_pct(s$n_missing_notif, s$n_confirmed)
+        )
+      ))
+    })
+
+    output$msf <- renderText(scales::number(df_summary()$n_msf))
+
+    output$msf_info <- renderUI({
+      s <- df_summary()
+      vb_stat_line(list(
+        list(
+          label = "Of confirmed",
+          value = vb_pct(s$n_msf, s$n_confirmed)
         ),
         list(
-          full = "Suspect:",
-          med = "Susp.",
-          short = "S.",
-          value = scales::number(s$n_suspect)
+          label = "Of alive at notification",
+          value = vb_pct(s$n_msf, s$n_alive_notif)
         )
       ))
     })
@@ -96,34 +166,39 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
 
     output$deaths_info <- renderUI({
       s <- df_summary()
-      vb_share_line(s$n_died, s$n_confirmed)
+      vb_stat_line(list(
+        list(
+          label = "CFR",
+          value = vb_pct(s$n_died, s$n_died + s$n_recovered)
+        )
+      ))
     })
 
-    output$recovered <- renderText(scales::number(df_summary()$n_recovered))
+    output$nonisolated_deaths <- renderText(
+      scales::number(df_summary()$n_nonisolated_deaths)
+    )
 
-    output$recovered_info <- renderUI({
+    output$nonisolated_deaths_info <- renderUI({
       s <- df_summary()
-      vb_share_line(s$n_recovered, s$n_confirmed)
+      vb_stat_line(list(
+        list(
+          label = "Of deaths",
+          value = vb_pct(s$n_nonisolated_deaths, s$n_died)
+        )
+      ))
     })
   })
 }
 
 #* Value-box helpers ------------------------------------
 
-# Denominator is every confirmed case, including those still under care, so
-# the share is not a CFR - say so rather than let it be read as one.
-vb_outcome_tooltip <- function(outcome) {
-  paste0(
-    "Confirmed cases only.<br><br>",
-    "The percentage is the share of all confirmed cases that have ",
-    outcome,
-    ", including those still under care or with no recorded exit. ",
-    "It is not a case fatality ratio."
-  )
+# n / denom as a percentage string, or an em dash when denom is 0 - avoids a
+# 0/0 -> NaN reaching the UI.
+vb_pct <- function(n, denom) {
+  if (denom == 0) "—" else scales::percent(n / denom, accuracy = 0.1)
 }
 
-# Muted label / bold value stat line under a value box, with the label
-# shortened in three tiers as the box narrows (see www/styles.css).
+# Muted label / bold value stat line under a value box.
 vb_stat_line <- function(stats) {
   do.call(
     tags$span,
@@ -132,12 +207,7 @@ vb_stat_line <- function(stats) {
       lapply(stats, function(s) {
         tags$span(
           class = "vb-stat",
-          tags$span(
-            class = "vb-stat-label",
-            tags$span(class = "lbl-full", s$full),
-            tags$span(class = "lbl-med", s$med %||% s$short),
-            tags$span(class = "lbl-short", s$short)
-          ),
+          tags$span(class = "vb-stat-label", paste0(s$label, ":")),
           tags$span(class = "vb-stat-value", s$value)
         )
       })
@@ -145,25 +215,8 @@ vb_stat_line <- function(stats) {
   )
 }
 
-vb_share_line <- function(n, denom) {
-  share <- if (denom == 0) {
-    "—"
-  } else {
-    scales::percent(n / denom, accuracy = 0.1)
-  }
-  vb_stat_line(list(
-    list(full = "Of confirmed:", med = "Of conf.:", short = "%", value = share)
-  ))
-}
-
-# Value-box title with an info-circle tooltip. hide_when_wide drops the icon
-# once the box is wide enough to spell the labels out in full.
-vb_title_info <- function(
-  title,
-  html,
-  max_width = "300px",
-  hide_when_wide = FALSE
-) {
+# Value-box title with an info-circle tooltip.
+vb_title_info <- function(title, html, max_width = "300px") {
   tip_class <- paste0("tooltip-", gsub("[^a-z]", "", tolower(title)))
   icon <- bslib::tooltip(
     bsicons::bs_icon("info-circle"),
@@ -181,9 +234,6 @@ vb_title_info <- function(
   tags$div(
     class = "d-flex align-items-center gap-2",
     title,
-    tags$span(
-      class = if (hide_when_wide) "vb-status-tooltip" else "vb-tooltip",
-      icon
-    )
+    tags$span(class = "vb-tooltip", icon)
   )
 }

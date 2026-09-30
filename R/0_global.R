@@ -102,6 +102,14 @@ sitrep_path <- fs::path(
   "sitrep_summary.xlsx"
 )
 
+#* Investigator follow-up -----------
+investigator_followup_path <- fs::path(
+  butembo_project_data_path,
+  "brute",
+  "suivi investigation",
+  "suivi investigateurs.xlsx"
+)
+
 #* ENSEMBLE LINELIST ----------------
 narr_ll_dir <- fs::path(
   butembo_project_data_path,
@@ -143,4 +151,4 @@ sf_data_path <- fs::path(butembo_project_sf_data_path, "rds")
 adm1 <- read_geo_cached("COD_adm1_sub.rds")
 adm2 <- read_geo_cached("COD_adm2_sub.rds")
 adm3 <- read_geo_cached("COD_adm3_sub.rds")
-#hf <- readRDS(fs::path(sf_data_path, "COD_HF_sub_gis.rds"))
+hf <- read_geo_cached("COD_HF_sub_gis.rds")
