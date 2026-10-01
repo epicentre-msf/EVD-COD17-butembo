@@ -69,11 +69,14 @@ mod_lab_server <- function(id, df) {
       ratio_denom = c("Positif", "Négatif")
     )
 
-    # ratio line is opt-in in epishiny, but it is the main read of this tab
-    observe({
-      updateCheckboxInput(session, "curve-show_ratio_line", value = TRUE)
-    }) |>
-      bindEvent(TRUE, once = TRUE)
+    # time_ui hardcodes the switch to FALSE, so flip it once at start
+    observeEvent(
+      TRUE,
+      {
+        bslib::update_switch("curve-show_ratio_line", value = TRUE)
+      },
+      once = TRUE
+    )
 
     df_summary <- reactive({
       d <- if (is.reactive(df)) df() else df

@@ -112,7 +112,7 @@ group_vars <- c(
   "Outcome" = "type_of_exit"
 )
 
-lab_date_vars <-c("Date of lab result" = "date_lab_result")
+lab_date_vars <- c("Date of lab result" = "date_lab_result")
 
 lab_group_vars <- c(
   "Result" = "lab_result",
