@@ -1,5 +1,5 @@
-# Build the shareable vaccinated-case linelist from the ETC export.
-# Joins surveillance exposure variables, adds the two pre-ETC cases.
+# Build the shareable vaccinated-case linelist (vax_ll) and compare it with the matched file.
+# Kitatumba ETC vaccinated cases, plus pre-ETC cases from the surveillance linelist.
 
 #* Load packages ---------------------------
 source(here::here("R", "0_global.R"))
@@ -7,12 +7,13 @@ source(here::here("R", "0_global.R"))
 #* Path ------------------------------------
 time_write <- time_stamp()
 latest_narr_ll_clean <- fs::dir_ls(local_ll_dir, regex = "BUT-EVD") |> max()
+etc_ll <- fs::dir_ls(etc_export_nominatif_dir) |> max()
 
 #* Import data -----------------------------
-# latest surveillance linelist
+#* surveillance data
 ll_clean <- readRDS(latest_narr_ll_clean)
 
-# kitatumba id can be recorded under id_msf or id_msf_2 - resolve to one column
+# kitatumba id can sit in id_msf or id_msf_2
 ll_clean <- ll_clean |>
   mutate(
     kit_id = case_when(
@@ -22,26 +23,20 @@ ll_clean <- ll_clean |>
     )
   )
 
-#* Vaccinated cases -------------------------
-
-etc_ll <- fs::dir_ls(fs::path(
-  butembo_project_data_path,
-  "linelists",
-  "cte_kitatumba",
-  "export_nominatif"
-)) |>
-  max()
-
-# kitatumba linelists
-kit_ll <- rpxl::rp_xlsb(etc_ll, password = "ebolaExport", sheet = 1) |>
+#* Kitatumba ETC linelist
+kit_ll <- rpxl::rp_xlsb(etc_ll_path_kit, password = "ebolaExport", sheet = 1) |>
   as_tibble() |>
   mutate(phone_number = str_remove(phone_number, "^0"))
 
-# All vaccinated cases who have been in Kitatumba
+#* UCG ETC linelist
+ucg_ll <- rpxl::rp_xlsb(etc_ll_path_ucg, password = "ebolaExport", sheet = 1) |>
+  as_tibble() |>
+  mutate(phone_number = str_remove(phone_number, "^0"))
+
+
+#* 1. Vaccinated cases in Kitatumba ---------
 vax <- kit_ll |>
-  filter(
-    str_detect(vaccination_rvsv_yn, "Oui")
-  ) |>
+  filter(str_detect(vaccination_rvsv_yn, "Oui")) |>
   transmute(
     id_msf = patient_site_id,
     EVD_status,
@@ -58,7 +53,36 @@ vax <- kit_ll |>
     type_of_exit
   )
 
-# earliest positive lab test per pid, so it serves ETC and pre-ETC cases
+#* 2. Vaccinated cases did not go to the ETC
+# no kit_id: they were never admitted to Kitatumba
+extra_vax <- ll_clean |>
+  filter(
+    str_detect(vaccination_rvsv_yn, "Oui"),
+    is.na(kit_id)
+  ) |>
+  transmute(
+    id_msf,
+    EVD_status,
+    nom,
+    sex,
+    age,
+    age_unit,
+    job,
+    adm1_name__res,
+    adm2_name__res,
+    adm3_name__res,
+    type_of_exit,
+    vaccination_rvsv_yn,
+    year_vaccination_rvsv
+  )
+
+vax_ll <- bind_rows(vax, extra_vax)
+cli::cli_inform(
+  "vax_ll: {nrow(vax)} ETC + {nrow(extra_vax)} pre-ETC = {nrow(vax_ll)}"
+)
+
+#* 3. Add surveillance fields ---------------
+# earliest positive test per pid, so it serves ETC and pre-ETC cases
 first_positive <- ll_clean |>
   filter(!is.na(pid)) |>
   select(
@@ -80,7 +104,7 @@ first_positive <- ll_clean |>
   slice_min(date_lab_sample, by = pid, n = 1, with_ties = FALSE) |>
   select(dhis2_id = pid, lab_id, lab_result, date_lab_sample)
 
-# pid for every matched case, lab fields only where a positive exists
+# lab fields stay NA where a pid has no positive test
 ll_lookup <- ll_clean |>
   filter(!is.na(kit_id)) |>
   select(kit_id, dhis2_id = pid) |>
@@ -90,50 +114,29 @@ ll_lookup <- ll_clean |>
     relationship = "one-to-one"
   )
 
-n_before <- nrow(vax)
-vax_clean <- vax |>
+n_before <- nrow(vax_ll)
+vax_ll <- vax_ll |>
   left_join(
     ll_lookup,
     by = join_by(id_msf == kit_id),
     relationship = "many-to-one"
   )
 cli::cli_inform(
-  "vax_clean: {n_before} row{?s} before ll_clean join, {nrow(vax_clean)} after"
+  "vax_ll: {n_before} row{?s} before ll_clean join, {nrow(vax_ll)} after"
 )
 
-# add the two cases before the ETC opened
-extra_vax <- ll_clean |>
-  filter(
-    str_detect(vaccination_rvsv_yn, "Oui"),
-    is.na(id_msf)
-  ) |>
-  transmute(
-    id_msf,
-    EVD_status,
-    nom,
-    sex,
-    age,
-    age_unit,
-    job,
-    adm1_name__res,
-    adm2_name__res,
-    adm3_name__res,
-    type_of_exit,
-    vaccination_rvsv_yn,
-    year_vaccination_rvsv
-  )
-
-#* Manual DHIS2 / lab ids for the pre-ETC cases ----
+# the two pre-ETC cases have no kit_id to join on
 manual_dhis2_id <- tibble::tribble(
   ~nom                   , ~dhis2_id             , ~lab_result , ~lab_id             , ~date_lab_sample      ,
   "KAVIRA TSONGO RACHEL" , "RDC-NKV-BUT-26-0209" , "Positif"   , "FHV-NK-BTB-26-234" , as.Date("2026-06-01") ,
   "SEHA KABILA DANIEL"   , "RDC-NKV-BUT-26-0208" , "Positif"   , "FHV-NK-BTB-26-232" , as.Date("2026-06-01")
 )
 
-vax_full <- bind_rows(vax_clean, extra_vax)
+vax_ll <- vax_ll |>
+  rows_update(manual_dhis2_id, by = "nom", unmatched = "ignore")
 
-# EVD_status is recoded to English upstream - this shared linelist stays French
-vax_full <- vax_full |>
+# EVD_status is English upstream; this shared linelist stays French
+vax_ll <- vax_ll |>
   mutate(
     EVD_status = case_match(
       EVD_status,
@@ -142,39 +145,22 @@ vax_full <- vax_full |>
     )
   )
 
+n_confirmed <- sum(vax_ll$EVD_status == "Confirmé", na.rm = TRUE)
+cli::cli_inform(c(
+  "{sum(vax_ll$EVD_status == 'Confirmé' & !is.na(vax_ll$dhis2_id), na.rm = TRUE)} of {n_confirmed} confirmed case{?s} matched a dhis2_id",
+  "{sum(vax_ll$EVD_status == 'Confirmé' & !is.na(vax_ll$lab_id), na.rm = TRUE)} of {n_confirmed} confirmed case{?s} matched a lab_id"
+))
 
-vax_full <- vax_full |>
-  rows_update(manual_dhis2_id, by = "nom", unmatched = "ignore")
+# confirmed cases still missing a lab_id
+vax_ll |> filter(is.na(lab_id), EVD_status == "Confirmé")
 
-# 1 / 9 confirmed has no DHIS2 Id in the ensemble -- not in BUT LL
-n_confirmed <- sum(vax_full$EVD_status == "Confirmé")
-cli::cli_inform(
-  "{sum(vax_full$EVD_status == 'Confirmé' & !is.na(vax_full$dhis2_id))} of {n_confirmed} confirmed case{?s} matched a dhis2_id"
-)
-
-cli::cli_inform(
-  "{sum(vax_full$EVD_status == 'Confirmé' & !is.na(vax_full$lab_id))} of {n_confirmed} confirmed case{?s} matched a lab_id"
-)
-
-# one case has no pid and no lab_id
-vax_full |> filter(is.na(lab_id), EVD_status == "Confirmé")
-
-#* Compare with matched version -------------
-butembo_matched_ll_dir <- fs::path(
-  onedrive,
-  "Ebola Outbreaks - COD_UGA-2026",
-  "COD",
-  "data-raw",
-  "Butembo-surv",
-  "data"
-)
-
+#* 4. Compare with the matched version ------
 matched_ll <- rio::import(
   fs::path(butembo_matched_ll_dir, "BUT_vaccinated_check_2026-09-28_CR.xlsx")
 ) |>
   as_tibble()
 
-# identity fields matching relies on - adjust if matched_ll names these differently
+# identity fields the matching relied on
 match_vars <- c(
   "nom",
   "phone_number",
@@ -187,13 +173,32 @@ match_vars <- c(
   "adm3_name__res"
 )
 
-# fall back to matching by name where id_msf is missing (the two pre-ETC
-# cases predate the ETC export and were never assigned one)
-matched_ll <- matched_ll |>
-  mutate(match_key = if_else(!is.na(id_msf), as.character(id_msf), nom))
+# name fallback for the pre-ETC cases, which have no id_msf; normalised
+# so accents and case do not split the same patient
+norm_key <- \(x) {
+  x |>
+    stringi::stri_trans_general("Latin-ASCII") |>
+    str_squish() |>
+    str_to_upper()
+}
+add_key <- \(d) {
+  d |>
+    mutate(
+      match_key = if_else(
+        !is.na(id_msf),
+        norm_key(as.character(id_msf)),
+        norm_key(nom)
+      )
+    )
+}
 
-vax_full <- vax_full |>
-  mutate(match_key = if_else(!is.na(id_msf), as.character(id_msf), nom))
+matched_ll <- add_key(matched_ll)
+vax_ll <- add_key(vax_ll)
+
+stopifnot(
+  "matched_ll has duplicate match_key" = !anyDuplicated(matched_ll$match_key),
+  "vax_ll has duplicate match_key" = !anyDuplicated(vax_ll$match_key)
+)
 
 to_long <- \(d, version) {
   d |>
@@ -207,22 +212,27 @@ to_long <- \(d, version) {
     mutate(version = version)
 }
 
-stopifnot(
-  "matched_ll has duplicate match_key" = !anyDuplicated(matched_ll$match_key),
-  "vax_full has duplicate match_key" = !anyDuplicated(vax_full$match_key)
-)
-
-# characteristics changed on patients present in both versions
+# patients in both versions; NA -> value and value -> NA count as changes
 vax_changed <- bind_rows(
   to_long(matched_ll, "old"),
-  to_long(vax_full, "new")
+  to_long(vax_ll, "new")
 ) |>
   pivot_wider(names_from = version, values_from = value) |>
-  filter(!is.na(old), !is.na(new), old != new) |>
+  filter(
+    match_key %in% matched_ll$match_key,
+    match_key %in% vax_ll$match_key
+  ) |>
+  filter(is.na(old) != is.na(new) | (!is.na(old) & old != new)) |>
+  mutate(
+    change_type = case_when(
+      is.na(old) ~ "filled",
+      is.na(new) ~ "lost",
+      .default = "changed"
+    )
+  ) |>
   arrange(match_key, variable)
 
-# patients in the new version that were never in the matched one
-vax_new_patients <- vax_full |>
+vax_new_patients <- vax_ll |>
   filter(!match_key %in% matched_ll$match_key)
 
 cli::cli_inform(c(
@@ -230,34 +240,32 @@ cli::cli_inform(c(
   "{nrow(vax_new_patients)} new patient{?s} to send for matching"
 ))
 
-# per-case review flags ----------------------
 changed_vars_by_key <- vax_changed |>
   summarise(changed_vars = str_c(variable, collapse = ", "), .by = match_key)
 
-n_before <- nrow(vax_full)
-vax_full <- vax_full |>
+n_before <- nrow(vax_ll)
+vax_ll <- vax_ll |>
   left_join(
     changed_vars_by_key,
     by = join_by(match_key),
     relationship = "one-to-one"
   )
 cli::cli_inform(
-  "vax_full: {n_before} row{?s} before join, {nrow(vax_full)} after"
+  "vax_ll: {n_before} row{?s} before join, {nrow(vax_ll)} after"
 )
 
-vax_full <- vax_full |>
+vax_ll <- vax_ll |>
   mutate(
     send_for_matching = !match_key %in% matched_ll$match_key,
     values_changed = !is.na(changed_vars),
     .before = changed_vars
   )
 
-
 #* Export ------------------------------------
-vax_full <- vax_full |> select(-match_key)
+vax_ll <- vax_ll |> select(-match_key)
 
 export_clean(
-  vax_full,
+  vax_ll,
   CONFIG$export_prefix,
   "vaccinated-linelist-share",
   time_write,
@@ -265,7 +273,7 @@ export_clean(
 )
 
 rio::export(
-  vax_full,
+  vax_ll,
   fs::path(
     butembo_matched_ll_dir,
     glue::glue("{CONFIG$export_prefix}_vaccinated-linelist__{time_write}.xlsx")
@@ -282,7 +290,9 @@ confirmed_kit <- ll_clean |>
       dhis2_id,
       first_pos_lab_id = lab_id,
       first_pos_date_lab_sample = date_lab_sample
-    )
+    ),
+    by = join_by(dhis2_id),
+    relationship = "many-to-one"
   ) |>
   print(n = Inf)
 

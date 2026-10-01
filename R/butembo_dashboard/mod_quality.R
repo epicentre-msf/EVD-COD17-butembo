@@ -51,6 +51,7 @@ rt_theme <- function(size = c("regular", "compact"), cell_padding = NULL) {
 mod_quality_ui <- function(id, quality) {
   ns <- NS(id)
   n_unmatched <- nrow(quality$unmatched)
+  n_hf_unmatched <- nrow(quality$hf_unmatched)
 
   nav_panel(
     title = tags$span(bsicons::bs_icon("clipboard2-check"), "Data quality"),
@@ -144,6 +145,43 @@ mod_quality_ui <- function(id, quality) {
                     )
                   ),
                   reactable::reactableOutput(ns("geo_unmatched_table"), height = "100%")
+                ))
+              ),
+              nav_panel(
+                title = htmltools::tagList(
+                  "Unmatched facilities",
+                  htmltools::span(
+                    class = "badge rounded-pill text-bg-secondary ms-1",
+                    n_hf_unmatched
+                  )
+                ),
+                value = "hf_unmatched",
+                bslib::as_fill_carrier(htmltools::div(
+                  class = "mt-3",
+                  htmltools::div(
+                    class = "d-flex align-items-start gap-5",
+                    quality_explainer(
+                      paste0(
+                        quality$hf_summary$n_matched, " of ",
+                        quality$hf_summary$n_total,
+                        " visited structures matched the facility file. "
+                      ),
+                      "The rest cannot be mapped: either no health area was ",
+                      "recorded, or the name and health area are not in the file."
+                    ),
+                    htmltools::div(
+                      class = "ms-auto pt-2 flex-shrink-0",
+                      bslib::tooltip(
+                        shiny::downloadButton(
+                          ns("download_hf_unmatched"),
+                          "Download .csv",
+                          class = "btn-sm btn-link text-muted text-decoration-none p-0 border-0"
+                        ),
+                        "Downloads the full unmatched-facilities table"
+                      )
+                    )
+                  ),
+                  reactable::reactableOutput(ns("hf_unmatched_table"), height = "100%")
                 ))
               )
             )
@@ -267,6 +305,28 @@ mod_quality_server <- function(id, quality) {
         defaultColDef = reactable::colDef(headerVAlign = "bottom")
       )
     })
+
+    output$hf_unmatched_table <- reactable::renderReactable({
+      reactable::reactable(
+        quality$hf_unmatched,
+        compact = TRUE,
+        highlight = TRUE,
+        defaultPageSize = 15,
+        showPageSizeOptions = TRUE,
+        pageSizeOptions = c(15, 30, 100),
+        defaultSorted = list(`N visits` = "desc"),
+        searchable = TRUE,
+        theme = rt_theme(cell_padding = "5px 10px"),
+        defaultColDef = reactable::colDef(headerVAlign = "bottom")
+      )
+    })
+
+    output$download_hf_unmatched <- shiny::downloadHandler(
+      filename = function() paste0("unmatched-facilities-", Sys.Date(), ".csv"),
+      content = function(file) {
+        utils::write.csv(quality$hf_unmatched, file, row.names = FALSE)
+      }
+    )
 
     output$download_unmatched <- shiny::downloadHandler(
       filename = function() paste0("unmatched-locations-", Sys.Date(), ".csv"),

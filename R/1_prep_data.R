@@ -3,6 +3,7 @@
 # rsyncs app_data.rds to the evd-2026-app dashboard on episerv.
 
 #* TODO ------------------------------------
+# - [ ] lab tab: set lab_path in 0_global.R, import and clean lab data
 
 #* CONFIG ------------------------------------
 
@@ -59,21 +60,6 @@ ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
   janitor::remove_empty(which = c("rows", "cols"))
 
 n_import <- nrow(ll_narr)
-
-followup_katwa <- rio::import(investigator_followup_path, which = "katwa") |>
-  as_tibble() |>
-  clean_names() |>
-  remove_empty() |>
-  mutate(across(matches("(^|_)date(_|$)"), harmonize_dates))
-
-followup_butembo <- rio::import(
-  investigator_followup_path,
-  which = "butembo"
-) |>
-  as_tibble() |>
-  clean_names() |>
-  remove_empty() |>
-  mutate(across(matches("(^|_)date(_|$)"), harmonize_dates))
 
 #* CLEAN LINELIST --------------------------
 ll_narr_clean <- ll_narr |>
@@ -354,6 +340,13 @@ saveRDS(
 
 
 #* HEALTH FACILITY VISITS ------------------
+
+# copied locally once; delete the local file to refresh from SharePoint
+if (!fs::file_exists(local_hf_cases_json)) {
+  fs::file_copy(hf_cases_json, local_hf_cases_json)
+}
+hf_matched <- sf::read_sf(local_hf_cases_json)
+
 # one row per visit
 hf_visits <- ll_narr_clean |>
   select(
@@ -369,7 +362,8 @@ hf_visits <- ll_narr_clean |>
     cols = -c(unique_id, pid),
     names_to = c(".value", "visit"),
     names_pattern = "(.*?)(\\d+)$",
-    names_transform = list(visit = as.integer)
+    names_transform = list(visit = as.integer),
+    values_drop_na = TRUE,
   ) |>
   rename_with(\(x) str_remove(x, "_$")) |>
   mutate(across(where(is.character), \(x) na_if(str_squish(x), ""))) |>
@@ -413,17 +407,95 @@ hf_visits <- ll_narr_clean |>
   # unique_id is the key app_data joins on; pid stays internal to prep
   select(-pid)
 
+
 cli::cli_alert_info(
   "{nrow(hf_visits)} visits recorded by \\
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
 
-#export_clean(hf_visits, "hf-visits", time_write, dir = local_hf_dir)
+#* LAB DATA --------------------------------
+# Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
+
+# load
+lab_inrb <- rio::import(latest_inrb_lab_path, skip = 7) |>
+  as_tibble() |>
+  clean_names() |>
+  remove_empty()
+
+
+lab_inrb_clean <- lab_inrb |>
+  transmute(
+    new_sample = nouveau_prelevement_ou_reprelevement == "Nouveau Prélèvement",
+    date_notification = ymd(date_de_notification_dd_mm_yyy),
+    patient_status = statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
+    province,
+    zone_de_sante,
+    aire_de_sante,
+    origin = provenance,
+    sample_type = recode_values(
+      type_d_echantillon,
+      "Ecouvillon Bucal(Oral,Salive)" ~ "Ecouvillon oral",
+      c("sang total", "Sang total") ~ "Sang total",
+      c("Lait Matérnel") ~ "Lait Maternel",
+      NA ~ NA_character_
+    ),
+    date_sampling = ymd(date_de_prelevement_dd_mm_yyy),
+    date_lab_result = ymd(date_d_analyse_dd_mm_yyy),
+    lab_result = recode_values(
+      resultat_final,
+      "NEGATIF" ~ "Négatif",
+      "POSITIF" ~ "Positif",
+      NA ~ NA_character_
+    ),
+    source = "INRB Béni"
+  )
+
+lab_mobile <- rio::import(latest_mobile_lab) |>
+  as_tibble() |>
+  clean_names() |>
+  remove_empty()
+
+lab_mobile_clean <- lab_mobile |>
+  transmute(
+    new_sample = nouveau_prelevement_ou_reprelevement == "Nouveau Prélèvement",
+    patient_status = recode_values(
+      statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
+      c("Décédé") ~ "Décédé",
+      "Vivant" ~ "Vivant",
+      NA ~ NA_character_
+    ),
+    date_notification = harmonize_dates(date_de_notification_dd_mm_yyy),
+    province,
+    zone_de_sante,
+    aire_de_sante,
+    origin = provenance,
+    sample_type = recode_values(
+      type_d_echantillon,
+      "Ecouvillon Bucal(Oral,Salive)" ~ "Ecouvillon oral",
+      c("sang total", "Sang total") ~ "Sang total",
+      c("Lait Matérnel") ~ "Lait Maternel",
+      NA ~ NA_character_
+    ),
+    date_sampling = harmonize_dates(date_de_prelevement_mm_dd_yyy),
+    date_lab_result = harmonize_dates(date_danalyse),
+    lab_result = case_when(
+      str_detect(
+        kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg,
+        "Negatif"
+      ) ~ "Négatif",
+      kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
+        c("Positf", "Positif") ~ "Positif",
+      .default = NA_character_
+    ),
+    source = "Laboratoire Mobile"
+  )
+
+lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean) |>
+  mutate(lab_result = factor(lab_result, levels = c("Négatif", "Positif")))
 
 #* Prepare dashboard data -------------------------------------------
 
 # all pcodes needed for the data
-
 adm1_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm1_pcode__onset,
   ll_narr_clean$adm1_pcode__notif,
@@ -486,26 +558,13 @@ delay_dates <- c(
   "date_exit_eff"
 )
 
-# structures the FOSA layer cannot locate are absent; the app counts them
-hf_geo <- hf_match_geo(hf_visits, hf)
-
-n_hf_visited <- hf_visits |>
-  filter(!is.na(hf_name)) |>
-  distinct(hf_name, hf_as) |>
-  nrow()
-
-cli::cli_alert_info(
-  "{nrow(hf_geo)} of {n_hf_visited} visited structures located in the FOSA layer"
-)
-
 #* Save to server ------------------------------------------------------
 # app_data.rds feeds the evd-2026-app dashboard on episerv
 app_data <- list(
   linelist = add_delay_pairs(ll_narr_clean, delay_dates),
   quality = quality,
   hf_visits = hf_visits,
-  # matched here so the dashboard needs no string-matching packages
-  hf_geo = hf_geo,
+  lab_data = lab_data,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
 
@@ -524,8 +583,3 @@ if (SEND_TO_SERVER) {
     )
   )
 }
-
-#* Follow-up -----------------------------------------------------------
-
-followup_katwa
-followup_butembo

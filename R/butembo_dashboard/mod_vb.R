@@ -1,18 +1,14 @@
-# Value boxes above the dashboard: confirmed cases, notification status,
-# MSF caseload, deaths, community deaths.
+# Value boxes above the dashboard: confirmed cases (with MSF caseload), notification status,
+# deaths (with non-isolated split), cases investigated.
 
 mod_vb_ui <- function(id) {
   ns <- NS(id)
   bslib::layout_columns(
-    col_widths = c(2, 2, 4, 2, 2),
+    col_widths = c(3, 3, 3, 3),
     fill = FALSE,
     class = "pt-2 hgap-tight",
     value_box(
-      title = vb_title_info(
-        "Confirmed cases",
-        "Denominator note: counts of confirmed cases only.",
-        max_width = "260px"
-      ),
+      title = "Confirmed cases",
       value = textOutput(ns("confirmed"), inline = TRUE),
       p(uiOutput(ns("confirmed_info"), inline = TRUE)),
       showcase_layout = "left center",
@@ -20,15 +16,7 @@ mod_vb_ui <- function(id) {
       height = "85px"
     ),
     value_box(
-      title = vb_title_info(
-        "Alive at notification",
-        paste0(
-          "Confirmed cases only.<br><br>",
-          "Share alive when notified, from dead_upon_notif ",
-          "(derived - dead_upon_arrival is dropped upstream). ",
-          "Missing is the share with no recorded status."
-        )
-      ),
+      title = "Alive at notification",
       value = textOutput(ns("alive_notif"), inline = TRUE),
       p(uiOutput(ns("alive_notif_info"), inline = TRUE)),
       showcase_layout = "left center",
@@ -37,22 +25,11 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "MSF confirmed patients",
-        "Confirmed cases only. Cases with a non-missing id_msf."
-      ),
-      value = textOutput(ns("msf"), inline = TRUE),
-      p(uiOutput(ns("msf_info"), inline = TRUE)),
-      showcase_layout = "left center",
-      class = "vb-accent vb-msf",
-      height = "85px"
-    ),
-    value_box(
-      title = vb_title_info(
         "Deaths",
         paste0(
-          "Confirmed cases only.<br><br>",
           "CFR is deaths over cases with a known outcome ",
-          "(Died or Recovered) - abandoned and unresolved exits excluded."
+          "(Died or Recovered) - abandoned and unresolved exits excluded.<br><br>",
+          "Non-isolated is any death occuring outside a CTE or CT"
         )
       ),
       value = textOutput(ns("deaths"), inline = TRUE),
@@ -63,13 +40,18 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "Non-isolated deaths",
-        "Confirmed cases only. death_place is Community rather than CTE/CT."
+        "Cases investigated",
+        paste0(
+          "All cases, not only confirmed.<br><br>",
+          "Investigated is Lu or Lu - Peu Detaillé. Pending is Pas Lu or ",
+          "Pre-Traité. Missing is no value or Pas Dispo. ",
+          "Percentages are over all cases."
+        )
       ),
-      value = textOutput(ns("nonisolated_deaths"), inline = TRUE),
-      p(uiOutput(ns("nonisolated_deaths_info"), inline = TRUE)),
+      value = textOutput(ns("narr_final"), inline = TRUE),
+      p(uiOutput(ns("narr_info"), inline = TRUE)),
       showcase_layout = "left center",
-      class = "vb-accent vb-nonisolated",
+      class = "vb-accent vb-narrative",
       height = "85px"
     )
   )
@@ -97,7 +79,6 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       n_confirmed <- nrow(conf)
 
       n_alive_notif <- sum(conf$dead_upon_notif == FALSE, na.rm = TRUE)
-      n_missing_notif <- sum(is.na(conf$dead_upon_notif))
 
       n_msf <- sum(!is.na(conf$id_msf))
 
@@ -110,11 +91,21 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
         na.rm = TRUE
       )
 
+      # accent-stripped so "Pre-Traité" and "Pre-Traite" both match
+      narr <- chartr("éè", "ee", tolower(stringr::str_squish(d$narratif)))
+
       list(
+        n_all = nrow(d),
+        n_narr_missing = sum(is.na(narr) | narr == "pas dispo"),
+        # Pas Lu and Pre-Traité are both waiting on a finalised narrative
+        n_narr_pending = sum(narr %in% c("pas lu", "pre-traite")),
+        # "Lu - peu détaillé" counts as read too, whatever dash the export uses
+        n_narr_final = sum(
+          stringr::str_detect(narr, "^lu($|\\s*[-–—]\\s*peu detaill)"),
+          na.rm = TRUE
+        ),
         n_confirmed = n_confirmed,
-        n_probable = sum(d$EVD_status == "Probable", na.rm = TRUE),
         n_alive_notif = n_alive_notif,
-        n_missing_notif = n_missing_notif,
         n_msf = n_msf,
         n_died = n_died,
         n_recovered = n_recovered,
@@ -127,37 +118,39 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$confirmed_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
-        list(label = "Probable", value = scales::number(s$n_probable))
+        list(
+          label = "MSF confirmed patients",
+          value = paste0(
+            scales::number(s$n_msf),
+            " (",
+            vb_pct(s$n_msf, s$n_confirmed),
+            ")"
+          )
+        )
       ))
     })
 
     output$alive_notif <- renderText({
       s <- df_summary()
-      vb_pct(s$n_alive_notif, s$n_confirmed)
+      paste0(
+        scales::number(s$n_alive_notif),
+        " (",
+        vb_pct(s$n_alive_notif, s$n_confirmed),
+        ")"
+      )
     })
 
     output$alive_notif_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Missing",
-          value = vb_pct(s$n_missing_notif, s$n_confirmed)
-        )
-      ))
-    })
-
-    output$msf <- renderText(scales::number(df_summary()$n_msf))
-
-    output$msf_info <- renderUI({
-      s <- df_summary()
-      vb_stat_line(list(
-        list(
-          label = "Of confirmed",
-          value = vb_pct(s$n_msf, s$n_confirmed)
-        ),
-        list(
-          label = "Of alive at notification",
-          value = vb_pct(s$n_msf, s$n_alive_notif)
+          label = "MSF confirmed patients",
+          value = paste0(
+            scales::number(s$n_msf),
+            " (",
+            vb_pct(s$n_msf, s$n_alive_notif),
+            ")"
+          )
         )
       ))
     })
@@ -170,20 +163,49 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
         list(
           label = "CFR",
           value = vb_pct(s$n_died, s$n_died + s$n_recovered)
+        ),
+        list(
+          label = "Non-isolated",
+          value = paste0(
+            scales::number(s$n_nonisolated_deaths),
+            " (",
+            vb_pct(s$n_nonisolated_deaths, s$n_died),
+            ")"
+          )
         )
       ))
     })
 
-    output$nonisolated_deaths <- renderText(
-      scales::number(df_summary()$n_nonisolated_deaths)
-    )
+    output$narr_final <- renderText({
+      s <- df_summary()
+      paste0(
+        scales::number(s$n_narr_final),
+        " (",
+        vb_pct(s$n_narr_final, s$n_all),
+        ")"
+      )
+    })
 
-    output$nonisolated_deaths_info <- renderUI({
+    output$narr_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Of deaths",
-          value = vb_pct(s$n_nonisolated_deaths, s$n_died)
+          label = "Pending",
+          value = paste0(
+            scales::number(s$n_narr_pending),
+            " (",
+            vb_pct(s$n_narr_pending, s$n_all),
+            ")"
+          )
+        ),
+        list(
+          label = "Missing",
+          value = paste0(
+            scales::number(s$n_narr_missing),
+            " (",
+            vb_pct(s$n_narr_missing, s$n_all),
+            ")"
+          )
         )
       ))
     })

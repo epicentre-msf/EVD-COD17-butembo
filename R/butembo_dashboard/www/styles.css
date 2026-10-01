@@ -73,6 +73,10 @@
 /* matches evd-2026-app's COL_DEATHS blue, so deaths don't repeat Confirmed's red */
 .vb-deaths       { border-left: 6px solid #2171b5 !important; }
 .vb-nonisolated  { border-left: 6px solid #6a4c93 !important; }
+.vb-narrative    { border-left: 6px solid #2a9d8f !important; }
+.vb-lab-samples  { border-left: 6px solid #2171b5 !important; }
+.vb-lab-positive { border-left: 6px solid #8b0000 !important; }
+.vb-lab-delay    { border-left: 6px solid #e09f3e !important; }
 
 /* ---- Place map (R/mod_map_place.R) ---- */
 /* hover tooltip is display-only; click-through avoids stealing mousemove

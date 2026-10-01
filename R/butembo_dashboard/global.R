@@ -25,7 +25,13 @@ but_ll <- app_data$linelist
 
 # one row per recorded health-facility visit, and the FOSA layer to map them
 hf_visits <- app_data$hf_visits
+
+# one row per sample tested, for the Lab data tab
+lab_data <- app_data$lab_data
 hf_geo <- app_data$hf_geo
+# cases per located site, and flows between sites; not yet mapped in the app
+hf_cases <- app_data$hf_cases
+hf_flows <- app_data$hf_flows
 
 # completeness and geo-match tables, built in prep for the Data quality tab
 quality <- app_data$quality
@@ -106,10 +112,21 @@ group_vars <- c(
   "Outcome" = "type_of_exit"
 )
 
+lab_date_vars <-c("Date of lab result" = "date_lab_result")
+
+lab_group_vars <- c(
+  "Result" = "lab_result",
+  "Source" = "source",
+  "Sample type" = "sample_type"
+)
+
 # ! Modules ----------------------------
 
 # value boxes module
 source("mod_vb.R")
+
+# lab tab: value boxes + samples curve, reuses the vb_* helpers above
+source("mod_lab.R")
 
 # place (map) module
 source("mod_map_place.R")
@@ -150,6 +167,9 @@ evd_status_cols <- c(
 )
 
 evd_pal <- unname(evd_status_cols[c("Confirmed", "Probable")])
+
+# positional on the lab_result levels: Négatif pale grey, Positif dark red
+lab_pal <- c("#d9d9d9", "#8b0000")
 
 # https://apps.epicentre-msf.org/testing/
 # docker run --rm -p 5858:3838 \

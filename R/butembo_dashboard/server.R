@@ -10,7 +10,7 @@ server <- function(input, output, session) {
   )
 
   # global period filter, on top of the sidebar/click filters, anchored to
-  # the most recent notification date in the data rather than Sys.Date()
+  # the most recent lab result date in the data rather than Sys.Date()
   df_period <- reactive({
     d <- filter_data$df()
     per <- input$period %||% "total"
@@ -18,8 +18,13 @@ server <- function(input, output, session) {
       return(d)
     }
     n_days <- c(last_7d = 7, last_14d = 14, last_21d = 21)[[per]]
-    max_date <- max(d$date_notification, na.rm = TRUE)
-    dplyr::filter(d, date_notification >= max_date - (n_days - 1))
+    max_date <- max(d$date_lab_result_1, na.rm = TRUE)
+    out <- dplyr::filter(d, date_lab_result_1 >= max_date - (n_days - 1))
+    message(
+      "period ", per, ": kept ", nrow(out), " of ", nrow(d),
+      " rows (", sum(is.na(d$date_lab_result_1)), " without lab date)"
+    )
+    out
   })
 
   map_click <- mod_map_place_server(
@@ -73,7 +78,7 @@ server <- function(input, output, session) {
     group_vars = group_vars
   )
 
-  mod_epicurve_hz_server("epicurve_hz", df = shiny::reactive(but_ll))
+  mod_epicurve_hz_server("epicurve_hz", df = df_period)
 
   mod_facilities_server(
     "facilities",
@@ -85,6 +90,8 @@ server <- function(input, output, session) {
   )
 
   mod_quality_server("quality", quality = quality)
+
+  mod_lab_server("lab", shiny::reactive(lab_data))
 
   # epishiny 0.1.0 has no default-date arg, so set it once on startup
   observe({

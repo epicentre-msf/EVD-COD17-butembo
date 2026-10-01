@@ -77,15 +77,28 @@ transmission_dir <- fs::path(
 )
 
 #* ETC data --------------------------
-etc_ll_path <- fs::dir_ls(
+etc_ll_path <- fs::path(butembo_project_data_path, "linelists")
+
+# kitatumba
+etc_ll_path_kit <- fs::dir_ls(
   fs::path(
-    butembo_project_data_path,
-    "linelists",
+    etc_ll_path,
     "cte_kitatumba",
     "exports"
   )
 ) |>
   max()
+
+# UCG
+etc_ll_path_ucg <- fs::dir_ls(
+  fs::path(
+    etc_ll_path,
+    "ct_ucg",
+    "exports"
+  )
+) |>
+  max()
+
 
 #* Spatial data --------------------
 butembo_project_sf_data_path <- fs::path(
@@ -102,13 +115,15 @@ sitrep_path <- fs::path(
   "sitrep_summary.xlsx"
 )
 
-#* Investigator follow-up -----------
-investigator_followup_path <- fs::path(
-  butembo_project_data_path,
-  "brute",
-  "suivi investigation",
-  "suivi investigateurs.xlsx"
+#* LABORATORY DATA ------------------
+lab_dir <- fs::path(butembo_project_data_path, "brute", "labo")
+
+latest_inrb_lab_path <- fs::dir_ls(
+  fs::path(lab_dir),
+  regex = 'Butembo_MVE17_Partage_Resultats'
 )
+
+latest_mobile_lab <- fs::dir_ls(lab_dir, regex = "MVE_17_LABO_MOBILE_BUTEMBO")
 
 #* ENSEMBLE LINELIST ----------------
 narr_ll_dir <- fs::path(
@@ -129,10 +144,40 @@ butembo_share_data_path <- fs::path(
   "partage"
 )
 
+# matched facilities with confirmed-case counts, GeoJSON
+hf_cases_json <- fs::path(
+  butembo_project_data_path,
+  "spatiale",
+  "etablissements_sante",
+  "Nombre de cas par FOSA",
+  "cod_butembo_nb_cas_par_fosa.json"
+)
+
+# nominative ETC export and the matched vaccinated files, used by vaccinated_cases.R
+etc_export_nominatif_dir <- fs::path(
+  butembo_project_data_path,
+  "linelists",
+  "cte_kitatumba",
+  "export_nominatif"
+)
+
+butembo_matched_ll_dir <- fs::path(
+  onedrive,
+  "Ebola Outbreaks - COD_UGA-2026",
+  "COD",
+  "data-raw",
+  "Butembo-surv",
+  "data"
+)
+
 local_dir <- here::here("local")
 local_geobase_dir <- fs::path(local_dir, "geobase")
 local_ll_dir <- fs::path(local_dir, "linelist")
 local_hf_dir <- fs::path(local_dir, "hf-visits")
+local_hf_cases_json <- fs::path(
+  local_hf_dir,
+  "cod_butembo_nb_cas_par_fosa.json"
+)
 
 fs::dir_create(c(local_geobase_dir, local_ll_dir, local_hf_dir))
 
@@ -151,4 +196,3 @@ sf_data_path <- fs::path(butembo_project_sf_data_path, "rds")
 adm1 <- read_geo_cached("COD_adm1_sub.rds")
 adm2 <- read_geo_cached("COD_adm2_sub.rds")
 adm3 <- read_geo_cached("COD_adm3_sub.rds")
-hf <- read_geo_cached("COD_HF_sub_gis.rds")

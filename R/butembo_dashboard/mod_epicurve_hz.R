@@ -1,7 +1,8 @@
-# Faceted epicurves by residence health zone or area, on date of onset or notification.
+# Faceted epicurves by residence health zone or area, on lab confirmation (default), onset or notification date.
 
 EPICURVE_HZ_ZONES <- c("Katwa", "Butembo", "Musienene")
 EPICURVE_HZ_DATES <- c(
+  "Date of lab confirmation" = "date_lab_result_1",
   "Date of onset" = "date_symptom_onset",
   "Date of notification" = "date_notification"
 )
@@ -22,8 +23,12 @@ mod_epicurve_hz_ui <- function(id) {
           shinyWidgets::radioGroupButtons(
             ns("date_var"),
             "Date",
-            choices = c(Onset = "date_symptom_onset", Notification = "date_notification"),
-            selected = "date_symptom_onset",
+            choices = c(
+              "Lab confirmation" = "date_lab_result_1",
+              Onset = "date_symptom_onset",
+              Notification = "date_notification"
+            ),
+            selected = "date_lab_result_1",
             size = "sm"
           ),
           shinyWidgets::radioGroupButtons(
@@ -92,7 +97,7 @@ mod_epicurve_hz_server <- function(id, df) {
       tolower(names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()])
     })
 
-    date_col <- shiny::reactive(input$date_var %||% "date_symptom_onset")
+    date_col <- shiny::reactive(input$date_var %||% "date_lab_result_1")
 
     output$plot_title <- shiny::renderText({
       paste0("New cases by place of residence (", date_lab(), ")")

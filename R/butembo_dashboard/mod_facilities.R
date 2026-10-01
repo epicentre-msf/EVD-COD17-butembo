@@ -1,7 +1,7 @@
 # Health facilities: structures visited before isolation (care pathway).
 # Top structures table, visit distributions, map and per-case timeline, all
 # driven by the filtered linelist and the long hf_visits table.
-# Ported from R/10_health-facilitiesf.R and R/epishiny_timeline.R; the timeline
+# Ported from R/archives/10_health-facilitiesf.R and epishiny_timeline.R; the timeline
 # labels cases by unique_id only, as no patient names reach the app.
 
 source("fn_facilities.R")
@@ -136,209 +136,209 @@ mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
         )
     })
 
-    #* Top structures ------------------------------------------------------
-    top <- shiny::reactive({
-      shiny::req(anchor())
-      hf_top_structures(visits_f(), anchor())
-    })
-
-    output$top_tbl <- reactable::renderReactable({
-      d <- top()
-      shiny::validate(shiny::need(nrow(d) > 0, "No structure visited in the last 21 days."))
-
-      domain <- c(0, max(d$j21))
-      count_col <- function(nm) {
-        reactable::colDef(name = nm, style = ramp_style(HF_CASE_RAMP, domain))
-      }
-
-      reactable::reactable(
-        d,
-        highlight = TRUE,
-        compact = TRUE,
-        pagination = FALSE,
-        theme = reactable::reactableTheme(
-          style = list(fontSize = "0.82rem"),
-          headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
-          cellPadding = "4px 6px"
-        ),
-        defaultColDef = reactable::colDef(align = "center", minWidth = 60),
-        columns = list(
-          hf_name = reactable::colDef(
-            name = "Structure",
-            align = "left",
-            sticky = "left",
-            minWidth = 170
-          ),
-          hf_as = reactable::colDef(name = "Health area", align = "left"),
-          hf_zs = reactable::colDef(name = "Health zone", align = "left"),
-          total = reactable::colDef(
-            name = "Total",
-            style = list(fontWeight = 600),
-            minWidth = 70
-          ),
-          j7 = count_col("7 d"),
-          j14 = count_col("14 d"),
-          j21 = count_col("21 d")
-        )
-      )
-    })
-
-    output$top_footer <- shiny::renderUI({
-      shiny::req(anchor())
-      htmltools::div(
-        class = "small text-muted",
-        paste0(
-          "Cases seen in the last 7 / 14 / 21 days to ",
-          format(anchor(), "%d %b %Y"),
-          ". ",
-          paste(HF_CTE_EXCLUDE, collapse = ", "),
-          " excluded: transit/treatment centres. ",
-          dplyr::n_distinct(visits_f()$unique_id),
-          " of ",
-          dplyr::n_distinct(df()$unique_id),
-          " filtered cases have a recorded visit."
-        )
-      )
-    })
-
-    #* Map -----------------------------------------------------------------
-    map_points <- shiny::reactive({
-      d <- top()
-      n_top <- nrow(d)
-      # hf_geo holds only the structures located in prep
-      d <- dplyr::inner_join(
-        hf_geo,
-        d,
-        by = dplyr::join_by(hf_name, hf_as),
-        relationship = "one-to-many"
-      )
-      stopifnot(nrow(d) <= n_top)
-      d |>
-        dplyr::mutate(
-          tooltip_html = paste0(
-            "<b>", hf_name, "</b><br>", hf_as, " | ", hf_zs,
-            "<br>Total: ", total,
-            "<br>7 d: ", j7, " &middot; 14 d: ", j14, " &middot; 21 d: ", j21
-          )
-        )
-    })
-
-    output$map <- mapgl::renderMaplibre({
-      pts <- map_points()
-
-      m <- mapgl::maplibre(
-        style = mapgl::carto_style("voyager"),
-        bounds = sf::st_bbox(adm3),
-        attributionControl = FALSE
-      ) |>
-        mapgl::add_source(id = "adm3", data = adm3) |>
-        mapgl::add_line_layer(
-          id = "adm3_line",
-          source = "adm3",
-          line_color = "#9a9a9a",
-          line_width = 1
-        ) |>
-        mapgl::add_source(id = "adm2", data = adm2) |>
-        mapgl::add_line_layer(
-          id = "adm2_line",
-          source = "adm2",
-          line_color = "#333333",
-          line_width = 1.8
-        )
-
-      if (nrow(pts) == 0) {
-        return(m)
-      }
-
-      rng <- range(pts$total)
-      fill <- if (rng[1] == rng[2]) {
-        HF_MAP_RAMP[1]
-      } else {
-        mapgl::interpolate(
-          column = "total",
-          values = rng,
-          stops = HF_MAP_RAMP
-        )
-      }
-
-      m |>
-        mapgl::add_source(id = "hf", data = pts) |>
-        mapgl::add_circle_layer(
-          id = "hf_circles",
-          source = "hf",
-          circle_color = fill,
-          circle_radius = 11,
-          circle_opacity = 0.92,
-          circle_stroke_color = "#ffffff",
-          circle_stroke_width = 1.2,
-          tooltip = "tooltip_html"
-        ) |>
-        mapgl::add_symbol_layer(
-          id = "hf_total",
-          source = "hf",
-          text_field = mapgl::get_column("total"),
-          text_color = "#ffffff",
-          text_size = 12,
-          text_allow_overlap = TRUE
-        ) |>
-        # collision handling drops overlapping names rather than stacking them
-        mapgl::add_symbol_layer(
-          id = "hf_names",
-          source = "hf",
-          text_field = mapgl::get_column("hf_name"),
-          text_size = 10,
-          text_offset = c(0, 1.9),
-          text_color = "#262626",
-          text_halo_color = "#ffffff",
-          text_halo_width = 1.5
-        )
-    })
-
-    output$map_footer <- shiny::renderUI({
-      n_unmapped <- nrow(top()) - nrow(map_points())
-      htmltools::div(
-        class = "small text-muted",
-        paste0(
-          "Colour by total cases. ",
-          n_unmapped,
-          " structure(s) not located (informal or absent from the FOSA layer)."
-        )
-      )
-    })
-
-    #* Distributions -------------------------------------------------------
-    output$dist_n <- highcharter::renderHighchart({
-      v <- visits_f()
-      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
-
-      v |>
-        dplyr::summarise(.by = unique_id, value = dplyr::n_distinct(hf_name)) |>
-        dplyr::pull(value) |>
-        hc_count_bars("Structures visited (per case)", "Structures")
-    })
-
-    output$dist_los <- highcharter::renderHighchart({
-      v <- visits_f()
-      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
-
-      # negative stays are entry errors, already NA in prep
-      v |>
-        dplyr::filter(!is.na(los)) |>
-        dplyr::pull(los) |>
-        hc_count_bars("Length of stay per structure (days)", "Days")
-    })
-
-    output$dist_footer <- shiny::renderUI({
-      v <- visits_f()
-      n_los <- sum(is.na(v$los))
-      htmltools::div(
-        class = "small text-muted",
-        paste0(
-          nrow(v), " visits by ", dplyr::n_distinct(v$unique_id), " cases; ",
-          n_los, " without a valid length of stay."
-        )
-      )
-    })
+#     #* Top structures ------------------------------------------------------
+#     top <- shiny::reactive({
+#       shiny::req(anchor())
+#       hf_top_structures(visits_f(), anchor())
+#     })
+#
+#     output$top_tbl <- reactable::renderReactable({
+#       d <- top()
+#       shiny::validate(shiny::need(nrow(d) > 0, "No structure visited in the last 21 days."))
+#
+#       domain <- c(0, max(d$j21))
+#       count_col <- function(nm) {
+#         reactable::colDef(name = nm, style = ramp_style(HF_CASE_RAMP, domain))
+#       }
+#
+#       reactable::reactable(
+#         d,
+#         highlight = TRUE,
+#         compact = TRUE,
+#         pagination = FALSE,
+#         theme = reactable::reactableTheme(
+#           style = list(fontSize = "0.82rem"),
+#           headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
+#           cellPadding = "4px 6px"
+#         ),
+#         defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+#         columns = list(
+#           hf_name = reactable::colDef(
+#             name = "Structure",
+#             align = "left",
+#             sticky = "left",
+#             minWidth = 170
+#           ),
+#           hf_as = reactable::colDef(name = "Health area", align = "left"),
+#           hf_zs = reactable::colDef(name = "Health zone", align = "left"),
+#           total = reactable::colDef(
+#             name = "Total",
+#             style = list(fontWeight = 600),
+#             minWidth = 70
+#           ),
+#           j7 = count_col("7 d"),
+#           j14 = count_col("14 d"),
+#           j21 = count_col("21 d")
+#         )
+#       )
+#     })
+#
+#     output$top_footer <- shiny::renderUI({
+#       shiny::req(anchor())
+#       htmltools::div(
+#         class = "small text-muted",
+#         paste0(
+#           "Cases seen in the last 7 / 14 / 21 days to ",
+#           format(anchor(), "%d %b %Y"),
+#           ". ",
+#           paste(HF_CTE_EXCLUDE, collapse = ", "),
+#           " excluded: transit/treatment centres. ",
+#           dplyr::n_distinct(visits_f()$unique_id),
+#           " of ",
+#           dplyr::n_distinct(df()$unique_id),
+#           " filtered cases have a recorded visit."
+#         )
+#       )
+#     })
+#
+#     #* Map -----------------------------------------------------------------
+#     map_points <- shiny::reactive({
+#       d <- top()
+#       n_top <- nrow(d)
+#       # hf_geo holds only the structures located in prep
+#       d <- dplyr::inner_join(
+#         hf_geo,
+#         d,
+#         by = dplyr::join_by(hf_name, hf_as),
+#         relationship = "one-to-many"
+#       )
+#       stopifnot(nrow(d) <= n_top)
+#       d |>
+#         dplyr::mutate(
+#           tooltip_html = paste0(
+#             "<b>", hf_name, "</b><br>", hf_as, " | ", hf_zs,
+#             "<br>Total: ", total,
+#             "<br>7 d: ", j7, " &middot; 14 d: ", j14, " &middot; 21 d: ", j21
+#           )
+#         )
+#     })
+#
+#     output$map <- mapgl::renderMaplibre({
+#       pts <- map_points()
+#
+#       m <- mapgl::maplibre(
+#         style = mapgl::carto_style("voyager"),
+#         bounds = sf::st_bbox(adm3),
+#         attributionControl = FALSE
+#       ) |>
+#         mapgl::add_source(id = "adm3", data = adm3) |>
+#         mapgl::add_line_layer(
+#           id = "adm3_line",
+#           source = "adm3",
+#           line_color = "#9a9a9a",
+#           line_width = 1
+#         ) |>
+#         mapgl::add_source(id = "adm2", data = adm2) |>
+#         mapgl::add_line_layer(
+#           id = "adm2_line",
+#           source = "adm2",
+#           line_color = "#333333",
+#           line_width = 1.8
+#         )
+#
+#       if (nrow(pts) == 0) {
+#         return(m)
+#       }
+#
+#       rng <- range(pts$total)
+#       fill <- if (rng[1] == rng[2]) {
+#         HF_MAP_RAMP[1]
+#       } else {
+#         mapgl::interpolate(
+#           column = "total",
+#           values = rng,
+#           stops = HF_MAP_RAMP
+#         )
+#       }
+#
+#       m |>
+#         mapgl::add_source(id = "hf", data = pts) |>
+#         mapgl::add_circle_layer(
+#           id = "hf_circles",
+#           source = "hf",
+#           circle_color = fill,
+#           circle_radius = 11,
+#           circle_opacity = 0.92,
+#           circle_stroke_color = "#ffffff",
+#           circle_stroke_width = 1.2,
+#           tooltip = "tooltip_html"
+#         ) |>
+#         mapgl::add_symbol_layer(
+#           id = "hf_total",
+#           source = "hf",
+#           text_field = mapgl::get_column("total"),
+#           text_color = "#ffffff",
+#           text_size = 12,
+#           text_allow_overlap = TRUE
+#         ) |>
+#         # collision handling drops overlapping names rather than stacking them
+#         mapgl::add_symbol_layer(
+#           id = "hf_names",
+#           source = "hf",
+#           text_field = mapgl::get_column("hf_name"),
+#           text_size = 10,
+#           text_offset = c(0, 1.9),
+#           text_color = "#262626",
+#           text_halo_color = "#ffffff",
+#           text_halo_width = 1.5
+#         )
+#     })
+#
+#     output$map_footer <- shiny::renderUI({
+#       n_unmapped <- nrow(top()) - nrow(map_points())
+#       htmltools::div(
+#         class = "small text-muted",
+#         paste0(
+#           "Colour by total cases. ",
+#           n_unmapped,
+#           " structure(s) not located (informal or absent from the FOSA layer)."
+#         )
+#       )
+#     })
+#
+#     #* Distributions -------------------------------------------------------
+#     output$dist_n <- highcharter::renderHighchart({
+#       v <- visits_f()
+#       shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+#
+#       v |>
+#         dplyr::summarise(.by = unique_id, value = dplyr::n_distinct(hf_name)) |>
+#         dplyr::pull(value) |>
+#         hc_count_bars("Structures visited (per case)", "Structures")
+#     })
+#
+#     output$dist_los <- highcharter::renderHighchart({
+#       v <- visits_f()
+#       shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+#
+#       # negative stays are entry errors, already NA in prep
+#       v |>
+#         dplyr::filter(!is.na(los)) |>
+#         dplyr::pull(los) |>
+#         hc_count_bars("Length of stay per structure (days)", "Days")
+#     })
+#
+#     output$dist_footer <- shiny::renderUI({
+#       v <- visits_f()
+#       n_los <- sum(is.na(v$los))
+#       htmltools::div(
+#         class = "small text-muted",
+#         paste0(
+#           nrow(v), " visits by ", dplyr::n_distinct(v$unique_id), " cases; ",
+#           n_los, " without a valid length of stay."
+#         )
+#       )
+#     })
 
     #* Timeline ------------------------------------------------------------
     shiny::observe({
