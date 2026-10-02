@@ -1,4 +1,4 @@
-# Faceted epicurves by residence health zone or area, on lab confirmation (default), onset or notification date.
+# Faceted epicurves by notification (default) or residence health zone or area, on lab confirmation (default), onset or notification date.
 
 EPICURVE_HZ_ZONES <- c("Katwa", "Butembo", "Musienene")
 EPICURVE_HZ_DATES <- c(
@@ -24,20 +24,30 @@ mod_epicurve_hz_ui <- function(id) {
           width = 250,
           position = "right",
           bg = "#fff",
+          shiny::tags$div(
+            class = "epicurve-hz-date",
+            shinyWidgets::radioGroupButtons(
+              ns("date_var"),
+              "Date",
+              choices = c(
+                "Lab confirmation" = "date_lab_result_1",
+                Onset = "date_symptom_onset",
+                Notification = "date_notification"
+              ),
+              selected = "date_lab_result_1",
+              size = "sm"
+            )
+          ),
           shinyWidgets::radioGroupButtons(
-            ns("date_var"),
-            "Date",
-            choices = c(
-              "Lab confirmation" = "date_lab_result_1",
-              Onset = "date_symptom_onset",
-              Notification = "date_notification"
-            ),
-            selected = "date_lab_result_1",
+            ns("place_type"),
+            "Place",
+            choices = c(Notification = "notif", Residence = "res"),
+            selected = "notif",
             size = "sm"
           ),
           shinyWidgets::radioGroupButtons(
             ns("level"),
-            "Place of residence",
+            "Level",
             choices = c("Health zone" = "adm2", "Health area" = "adm3"),
             selected = "adm2",
             size = "sm"
@@ -91,9 +101,15 @@ mod_epicurve_hz_server <- function(id, df) {
   shiny::moduleServer(id, function(input, output, session) {
     n_cols <- 3L
 
-    # Restriction to the three zones is on residence, whatever level is plotted
+    place_type <- shiny::reactive(input$place_type %||% "notif")
+    place_lab <- shiny::reactive({
+      if (identical(place_type(), "res")) "residence" else "notification"
+    })
+
+    # Restriction to the three zones follows the place type, whatever level is plotted
     df_zones <- shiny::reactive({
-      df() |> dplyr::filter(adm2_name__res %in% EPICURVE_HZ_ZONES)
+      zone_col <- paste0("adm2_name__", place_type())
+      df() |> dplyr::filter(.data[[zone_col]] %in% EPICURVE_HZ_ZONES)
     })
 
     date_lab <- shiny::reactive({
@@ -103,12 +119,16 @@ mod_epicurve_hz_server <- function(id, df) {
     date_col <- shiny::reactive(input$date_var %||% "date_lab_result_1")
 
     output$plot_title <- shiny::renderText({
-      paste0("New cases by place of residence (", date_lab(), ")")
+      paste0("New cases by place of ", place_lab(), " (", date_lab(), ")")
     })
 
     # NA dates cannot be placed on the axis
     df_dated <- shiny::reactive({
-      lvl <- if (identical(input$level, "adm3")) "adm3_name__res" else "adm2_name__res"
+      lvl <- paste0(
+        if (identical(input$level, "adm3")) "adm3" else "adm2",
+        "_name__",
+        place_type()
+      )
       df_zones() |>
         dplyr::filter(!is.na(.data[[date_col()]])) |>
         dplyr::mutate(hz = dplyr::coalesce(as.character(.data[[lvl]]), "(Missing)"))
@@ -121,7 +141,7 @@ mod_epicurve_hz_server <- function(id, df) {
         class = "card-disclaimer",
         paste0(
           n_dropped, " of ", n_all, " cases (",
-          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), "%) resident in ",
+          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), "%) with ", place_lab(), " in ",
           paste(EPICURVE_HZ_ZONES, collapse = ", "),
           " have no ", date_lab(), " and are not shown."
         )

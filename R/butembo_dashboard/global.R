@@ -42,7 +42,10 @@ flow_edges <- hf_flows |>
   dplyr::transmute(origin = from, dest = to, count = n_cases) |>
   dplyr::filter(origin %in% flow_locations$id, dest %in% flow_locations$id)
 message(
-  "flowmap: kept ", nrow(flow_edges), " of ", nrow(hf_flows),
+  "flowmap: kept ",
+  nrow(flow_edges),
+  " of ",
+  nrow(hf_flows),
   " flows (an end without coordinates)"
 )
 

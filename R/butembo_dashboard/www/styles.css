@@ -142,3 +142,11 @@
   font-size: 0.68rem;
   line-height: 1.2;
 }
+
+/* Stratified epicurves: three date buttons must fit the 250px sidebar */
+.epicurve-hz-date .btn {
+  font-size: 0.75rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+  white-space: nowrap;
+}

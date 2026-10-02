@@ -248,7 +248,10 @@ mod_facilities_server <- function(
       )
       stopifnot(nrow(d) <= n_top)
       sf::st_as_sf(d, coords = c("lon", "lat"), crs = 4326) |>
+        # largest first, so small dots draw on top
+        dplyr::arrange(dplyr::desc(total)) |>
         dplyr::mutate(
+          indicator_value = as.numeric(total),
           tooltip_html = paste0(
             "<b>",
             hf_name,
@@ -312,19 +315,11 @@ mod_facilities_server <- function(
           id = "hf_circles",
           source = "hf",
           circle_color = fill,
-          circle_radius = 11,
+          circle_radius = bubble_radius_expr(rng[2]),
           circle_opacity = 0.92,
           circle_stroke_color = "#ffffff",
           circle_stroke_width = 1.2,
           tooltip = "tooltip_html"
-        ) |>
-        mapgl::add_symbol_layer(
-          id = "hf_total",
-          source = "hf",
-          text_field = mapgl::get_column("total"),
-          text_color = "#ffffff",
-          text_size = 12,
-          text_allow_overlap = TRUE
         ) |>
         # collision handling drops overlapping names rather than stacking them
         mapgl::add_symbol_layer(

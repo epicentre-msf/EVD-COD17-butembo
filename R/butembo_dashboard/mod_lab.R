@@ -50,14 +50,32 @@ mod_lab_ui <- function(id) {
         height = "85px"
       )
     ),
-    time_ui(
-      id = ns("curve"),
-      title = "Samples tested",
-      date_vars = lab_date_vars,
-      group_vars = lab_group_vars,
-      date_interval_default = "week",
-      group_var_default = "lab_result",
-      ratio_line_lab = "Show positivity line?"
+    bslib::layout_columns(
+      col_widths = c(7, 5),
+      time_ui(
+        id = ns("curve"),
+        title = "Samples tested",
+        date_vars = lab_date_vars,
+        group_vars = lab_group_vars,
+        date_interval_default = "week",
+        group_var_default = "lab_result",
+        ratio_line_lab = "Show positivity line?"
+      ),
+      bslib::card(
+        full_screen = TRUE,
+        bslib::card_header(
+          class = "d-flex justify-content-between align-items-center",
+          "Time from notification to result",
+          shiny::selectInput(
+            ns("delay_agg"),
+            label = NULL,
+            choices = c(Week = "week", Month = "month"),
+            selected = "week",
+            width = "110px"
+          )
+        ),
+        highcharter::highchartOutput(ns("delay_trend"), height = "100%")
+      )
     )
   )
 }
@@ -479,5 +497,79 @@ mod_lab_server <- function(id, df) {
         list(label = "With both dates", value = vb_pct(s$n_delay, s$n_all))
       ))
     })
+
+    output$delay_trend <- highcharter::renderHighchart({
+      d <- if (is.reactive(df)) df() else df
+      plot_lab_delay_trend(d, agg = input$delay_agg)
+    })
   })
+}
+
+# Binned on notification date, so a point is the wait for cases notified then.
+plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
+  agg <- match.arg(agg)
+
+  delay_df <- d |>
+    dplyr::transmute(
+      date_notification,
+      delay = as.numeric(date_lab_result - date_notification)
+    )
+  valid <- delay_df |>
+    dplyr::filter(!is.na(date_notification), !is.na(delay), delay >= 0)
+  n_removed <- nrow(delay_df) - nrow(valid)
+
+  summ <- valid |>
+    dplyr::mutate(
+      bin = lubridate::floor_date(
+        date_notification,
+        unit = agg,
+        week_start = getOption("epishiny.week.start", 1)
+      )
+    ) |>
+    dplyr::summarise(mean = mean(delay), n = dplyr::n(), .by = bin) |>
+    dplyr::arrange(bin) |>
+    dplyr::mutate(x = highcharter::datetime_to_timestamp(bin))
+
+  hc <- highcharter::highchart() |>
+    highcharter::hc_chart(type = "line", zoomType = "x") |>
+    highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
+    highcharter::hc_yAxis(title = list(text = "Mean delay (days)"), min = 0) |>
+    highcharter::hc_legend(enabled = FALSE) |>
+    highcharter::hc_exporting(enabled = TRUE) |>
+    highcharter::hc_tooltip(
+      useHTML = TRUE,
+      formatter = highcharter::JS(
+        "function() {
+          return Highcharts.dateFormat('%e %b %Y', this.x) + '<br/>' +
+            'Mean: ' + Highcharts.numberFormat(this.y, 1) + ' days<br/>' +
+            'n = ' + this.point.n;
+        }"
+      )
+    ) |>
+    highcharter::hc_credits(
+      enabled = TRUE,
+      text = paste0(
+        scales::number(n_removed),
+        " samples excluded (missing date or negative delay)"
+      )
+    )
+
+  if (nrow(summ) > 0) {
+    hc <- hc |>
+      highcharter::hc_add_series(
+        data = summ,
+        type = "line",
+        highcharter::hcaes(x = x, y = mean),
+        name = "Mean delay",
+        marker = list(enabled = TRUE, radius = 3)
+      )
+  }
+
+  if (agg == "week") {
+    hc <- hc |>
+      highcharter::hc_xAxis(
+        labels = list(formatter = epishiny:::hc_week_labels())
+      )
+  }
+  hc
 }

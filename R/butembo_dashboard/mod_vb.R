@@ -42,17 +42,17 @@ mod_vb_ui <- function(id) {
       title = vb_title_info(
         "Cases investigated",
         paste0(
-          "All cases, not only confirmed.<br><br>",
-          "Investigated is Lu or Lu - Peu Detaillé. Pending is Pas Lu or ",
-          "Pre-Traité. Missing is no value or Pas Dispo. ",
-          "Percentages are over all cases."
+          "Investigated is defined for any case with a narrative.<br>",
+          "Finalised: narrative is read and fully encoded in database.<br>",
+          "In process: narrative's key informations have been encoded in the database.<br>",
+          "Pending: narrative is available but not read."
         )
       ),
       value = textOutput(ns("narr_final"), inline = TRUE),
       p(uiOutput(ns("narr_info"), inline = TRUE)),
       showcase_layout = "left center",
       class = "vb-accent vb-narrative",
-      height = "85px"
+      height = "110px"
     )
   )
 }
@@ -93,17 +93,27 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
 
       # accent-stripped so "Pre-Traité" and "Pre-Traite" both match
       narr <- chartr("éè", "ee", tolower(stringr::str_squish(d$narratif)))
+      investigated <- !(is.na(narr) | narr %in% c("pas dispo", "missing"))
+      # "Lu - peu détaillé" counts as read too, whatever dash the export uses
+      investigation_status <- dplyr::case_when(
+        !investigated ~ NA_character_,
+        stringr::str_detect(narr, "^lu($|\\s*[-–—]\\s*peu detaill)") ~
+          "Finalised",
+        narr == "pre-traite" ~ "Been process",
+        narr == "pas lu" ~ "Pending",
+        .default = "Unrecognised"
+      )
+      n_unrecognised <- sum(investigation_status %in% "Unrecognised")
+      if (n_unrecognised > 0) {
+        message(n_unrecognised, " narratif values not recognised")
+      }
 
       list(
         n_all = nrow(d),
-        n_narr_missing = sum(is.na(narr) | narr == "pas dispo"),
-        # Pas Lu and Pre-Traité are both waiting on a finalised narrative
-        n_narr_pending = sum(narr %in% c("pas lu", "pre-traite")),
-        # "Lu - peu détaillé" counts as read too, whatever dash the export uses
-        n_narr_final = sum(
-          stringr::str_detect(narr, "^lu($|\\s*[-–—]\\s*peu detaill)"),
-          na.rm = TRUE
-        ),
+        n_investigated = sum(investigated),
+        n_finalised = sum(investigation_status %in% "Finalised"),
+        n_in_process = sum(investigation_status %in% "Been process"),
+        n_pending = sum(investigation_status %in% "Pending"),
         n_confirmed = n_confirmed,
         n_alive_notif = n_alive_notif,
         n_msf = n_msf,
@@ -179,9 +189,9 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$narr_final <- renderText({
       s <- df_summary()
       paste0(
-        scales::number(s$n_narr_final),
+        scales::number(s$n_investigated),
         " (",
-        vb_pct(s$n_narr_final, s$n_all),
+        vb_pct(s$n_investigated, s$n_all),
         ")"
       )
     })
@@ -190,20 +200,29 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Pending",
+          label = "Finalised",
           value = paste0(
-            scales::number(s$n_narr_pending),
+            scales::number(s$n_finalised),
             " (",
-            vb_pct(s$n_narr_pending, s$n_all),
+            vb_pct(s$n_finalised, s$n_investigated),
             ")"
           )
         ),
         list(
-          label = "Missing",
+          label = "In process",
           value = paste0(
-            scales::number(s$n_narr_missing),
+            scales::number(s$n_in_process),
             " (",
-            vb_pct(s$n_narr_missing, s$n_all),
+            vb_pct(s$n_in_process, s$n_investigated),
+            ")"
+          )
+        ),
+        list(
+          label = "Pending",
+          value = paste0(
+            scales::number(s$n_pending),
+            " (",
+            vb_pct(s$n_pending, s$n_investigated),
             ")"
           )
         )
