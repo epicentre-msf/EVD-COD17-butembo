@@ -531,6 +531,7 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
     dplyr::mutate(x = highcharter::datetime_to_timestamp(bin))
 
   hc <- highcharter::highchart() |>
+    highcharter::hc_title(text = NULL) |>
     highcharter::hc_chart(type = "line", zoomType = "x") |>
     highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
     highcharter::hc_yAxis(title = list(text = "Mean delay (days)"), min = 0) |>
