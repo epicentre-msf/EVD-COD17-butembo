@@ -52,6 +52,21 @@ server <- function(input, output, session) {
     filter_info = filter_data$filter_info
   )
 
+  # time_server takes one fixed palette, so send level colours for the chosen group
+  observeEvent(input[["curve-group"]], {
+    grp <- input[["curve-group"]]
+    session$sendCustomMessage(
+      "recolour",
+      list(
+        id = "curve-chart",
+        palette = as.list(c(
+          group_pals[[grp]],
+          setNames(na_col, getOption("epishiny.na.label"))
+        ))
+      )
+    )
+  })
+
   mod_vb_server(
     id = "vb",
     df = df_period,
@@ -84,7 +99,9 @@ server <- function(input, output, session) {
     "facilities",
     df = df_period,
     hf_visits = hf_visits,
-    hf_geo = hf_geo,
+    hf_cases = hf_cases,
+    flow_locations = flow_locations,
+    flow_edges = flow_edges,
     adm2 = app_data$admin_data$adm2,
     adm3 = app_data$admin_data$adm3
   )

@@ -1,17 +1,12 @@
 # Health facilities: structures visited before isolation (care pathway).
 # Top structures table, visit distributions, map and per-case timeline, all
 # driven by the filtered linelist and the long hf_visits table.
-# Ported from R/archives/10_health-facilitiesf.R and epishiny_timeline.R; the timeline
-# labels cases by unique_id only, as no patient names reach the app.
+# Ported from R/archives/10_health-facilitiesf.R; the timeline is mod_timeline.R.
 
-source("fn_facilities.R")
+source("mod_timeline.R")
 
 HF_CASE_RAMP <- c("#ffffff", "#fd7e14")
 HF_MAP_RAMP <- c("#d7301f", "#7f0000")
-HF_TL_DISEASE <- "#f2b0b0"
-HF_TL_ONSET <- "darkred"
-HF_TL_RECOVERED <- "#add8e6"
-HF_TL_DIED <- "#7f7f7f"
 
 # integer-binned histogram; zero bins kept so gaps in the distribution show
 hc_count_bars <- function(x, title, x_lab) {
@@ -28,15 +23,23 @@ hc_count_bars <- function(x, title, x_lab) {
       style = list(fontSize = "13px", fontWeight = "bold")
     ) |>
     highcharter::hc_xAxis(categories = lvls, title = list(text = x_lab)) |>
-    highcharter::hc_yAxis(title = list(text = "Count"), allowDecimals = FALSE) |>
+    highcharter::hc_yAxis(
+      title = list(text = "Count"),
+      allowDecimals = FALSE
+    ) |>
     highcharter::hc_plotOptions(
       column = list(pointPadding = 0, groupPadding = 0.02, borderWidth = 1)
     ) |>
     highcharter::hc_add_series(
-      data = counts,
+      data = highcharter::list_parse(data.frame(
+        y = counts,
+        pct = sprintf("%.1f%%", 100 * counts / sum(counts))
+      )),
       color = "#3a7ca5",
       name = "Count",
-      tooltip = list(pointFormat = "<b>{point.y}</b>")
+      tooltip = list(
+        pointFormat = "<b>{point.y}</b> ({point.pct})"
+      )
     ) |>
     highcharter::hc_legend(enabled = FALSE)
 }
@@ -49,74 +52,65 @@ mod_facilities_ui <- function(id) {
     rlang::check_installed(pkg_deps, reason = "to use the facilities module.")
   }
 
-  htmltools::tagList(
-    bslib::layout_columns(
-      col_widths = c(6, 6),
-      min_height = 520,
-      bslib::card(
-        full_screen = TRUE,
-        bslib::card_header("Structures that saw the most cases"),
-        bslib::card_body(reactable::reactableOutput(ns("top_tbl"))),
-        bslib::card_footer(shiny::uiOutput(ns("top_footer")))
+  bslib::layout_columns(
+    col_widths = c(5, 7),
+    min_height = 980,
+    bslib::navset_card_tab(
+      full_screen = TRUE,
+      id = ns("hf_tab"),
+      title = "Structures that saw cases",
+      bslib::nav_panel(
+        "Map",
+        shiny::uiOutput(ns("map_disclaimer")),
+        mapgl::maplibreOutput(ns("map"), height = "100%")
       ),
-      bslib::card(
-        full_screen = TRUE,
-        bslib::card_header("Map of the top structures"),
-        bslib::card_body(
-          padding = 0,
-          mapgl::maplibreOutput(ns("map"), height = "100%")
+      bslib::nav_panel(
+        "Table",
+        shiny::uiOutput(ns("table_disclaimer")),
+        reactable::reactableOutput(ns("top_tbl"))
+      ),
+      bslib::nav_panel(
+        "Flows",
+        htmltools::div(
+          class = "card-disclaimer",
+          "Consecutive visits, all cases; not affected by the filters."
         ),
-        bslib::card_footer(shiny::uiOutput(ns("map_footer")))
+        mapgl::maplibreOutput(ns("flow_map"), height = "100%")
       )
     ),
     bslib::layout_columns(
-      col_widths = c(4, 8),
-      min_height = 560,
-      bslib::card(
-        full_screen = TRUE,
-        bslib::card_header("Visits per case"),
-        bslib::card_body(
-          bslib::layout_column_wrap(
-            width = 1,
-            heights_equal = "row",
-            highcharter::highchartOutput(ns("dist_n"), height = "100%"),
-            highcharter::highchartOutput(ns("dist_los"), height = "100%")
-          )
-        ),
-        bslib::card_footer(shiny::uiOutput(ns("dist_footer")))
-      ),
+      col_widths = 12,
+      row_heights = c(1, 1.2),
       bslib::card(
         full_screen = TRUE,
         bslib::card_header(
-          class = "d-flex align-items-center gap-3",
-          htmltools::tags$span(class = "me-auto", "Care pathway timeline"),
-          shiny::selectInput(
-            ns("tl_facility"),
-            label = NULL,
-            choices = character(0),
-            width = "220px"
-          ),
-          shiny::numericInput(
-            ns("tl_max"),
-            label = NULL,
-            value = 30,
-            min = 5,
-            max = 100,
-            step = 5,
-            width = "90px"
-          )
+          class = "d-flex align-items-center flex-wrap gap-3",
+          "Visits per case",
+          shiny::uiOutput(ns("dist_footer"))
         ),
         bslib::card_body(
-          padding = 0,
-          highcharter::highchartOutput(ns("timeline"), height = "100%")
-        ),
-        bslib::card_footer(shiny::uiOutput(ns("tl_footer")))
-      )
+          bslib::layout_column_wrap(
+            width = 1 / 2,
+            highcharter::highchartOutput(ns("dist_n"), height = "100%"),
+            highcharter::highchartOutput(ns("dist_los"), height = "100%")
+          )
+        )
+      ),
+      mod_timeline_ui(ns("timeline"))
     )
   )
 }
 
-mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
+mod_facilities_server <- function(
+  id,
+  df,
+  hf_visits,
+  hf_cases,
+  flow_locations,
+  flow_edges,
+  adm2,
+  adm3
+) {
   shiny::moduleServer(id, function(input, output, session) {
     suppressMessages(sf::sf_use_s2(FALSE))
 
@@ -136,429 +130,353 @@ mod_facilities_server <- function(id, df, hf_visits, hf_geo, adm2, adm3) {
         )
     })
 
-#     #* Top structures ------------------------------------------------------
-#     top <- shiny::reactive({
-#       shiny::req(anchor())
-#       hf_top_structures(visits_f(), anchor())
-#     })
-#
-#     output$top_tbl <- reactable::renderReactable({
-#       d <- top()
-#       shiny::validate(shiny::need(nrow(d) > 0, "No structure visited in the last 21 days."))
-#
-#       domain <- c(0, max(d$j21))
-#       count_col <- function(nm) {
-#         reactable::colDef(name = nm, style = ramp_style(HF_CASE_RAMP, domain))
-#       }
-#
-#       reactable::reactable(
-#         d,
-#         highlight = TRUE,
-#         compact = TRUE,
-#         pagination = FALSE,
-#         theme = reactable::reactableTheme(
-#           style = list(fontSize = "0.82rem"),
-#           headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
-#           cellPadding = "4px 6px"
-#         ),
-#         defaultColDef = reactable::colDef(align = "center", minWidth = 60),
-#         columns = list(
-#           hf_name = reactable::colDef(
-#             name = "Structure",
-#             align = "left",
-#             sticky = "left",
-#             minWidth = 170
-#           ),
-#           hf_as = reactable::colDef(name = "Health area", align = "left"),
-#           hf_zs = reactable::colDef(name = "Health zone", align = "left"),
-#           total = reactable::colDef(
-#             name = "Total",
-#             style = list(fontWeight = 600),
-#             minWidth = 70
-#           ),
-#           j7 = count_col("7 d"),
-#           j14 = count_col("14 d"),
-#           j21 = count_col("21 d")
-#         )
-#       )
-#     })
-#
-#     output$top_footer <- shiny::renderUI({
-#       shiny::req(anchor())
-#       htmltools::div(
-#         class = "small text-muted",
-#         paste0(
-#           "Cases seen in the last 7 / 14 / 21 days to ",
-#           format(anchor(), "%d %b %Y"),
-#           ". ",
-#           paste(HF_CTE_EXCLUDE, collapse = ", "),
-#           " excluded: transit/treatment centres. ",
-#           dplyr::n_distinct(visits_f()$unique_id),
-#           " of ",
-#           dplyr::n_distinct(df()$unique_id),
-#           " filtered cases have a recorded visit."
-#         )
-#       )
-#     })
-#
-#     #* Map -----------------------------------------------------------------
-#     map_points <- shiny::reactive({
-#       d <- top()
-#       n_top <- nrow(d)
-#       # hf_geo holds only the structures located in prep
-#       d <- dplyr::inner_join(
-#         hf_geo,
-#         d,
-#         by = dplyr::join_by(hf_name, hf_as),
-#         relationship = "one-to-many"
-#       )
-#       stopifnot(nrow(d) <= n_top)
-#       d |>
-#         dplyr::mutate(
-#           tooltip_html = paste0(
-#             "<b>", hf_name, "</b><br>", hf_as, " | ", hf_zs,
-#             "<br>Total: ", total,
-#             "<br>7 d: ", j7, " &middot; 14 d: ", j14, " &middot; 21 d: ", j21
-#           )
-#         )
-#     })
-#
-#     output$map <- mapgl::renderMaplibre({
-#       pts <- map_points()
-#
-#       m <- mapgl::maplibre(
-#         style = mapgl::carto_style("voyager"),
-#         bounds = sf::st_bbox(adm3),
-#         attributionControl = FALSE
-#       ) |>
-#         mapgl::add_source(id = "adm3", data = adm3) |>
-#         mapgl::add_line_layer(
-#           id = "adm3_line",
-#           source = "adm3",
-#           line_color = "#9a9a9a",
-#           line_width = 1
-#         ) |>
-#         mapgl::add_source(id = "adm2", data = adm2) |>
-#         mapgl::add_line_layer(
-#           id = "adm2_line",
-#           source = "adm2",
-#           line_color = "#333333",
-#           line_width = 1.8
-#         )
-#
-#       if (nrow(pts) == 0) {
-#         return(m)
-#       }
-#
-#       rng <- range(pts$total)
-#       fill <- if (rng[1] == rng[2]) {
-#         HF_MAP_RAMP[1]
-#       } else {
-#         mapgl::interpolate(
-#           column = "total",
-#           values = rng,
-#           stops = HF_MAP_RAMP
-#         )
-#       }
-#
-#       m |>
-#         mapgl::add_source(id = "hf", data = pts) |>
-#         mapgl::add_circle_layer(
-#           id = "hf_circles",
-#           source = "hf",
-#           circle_color = fill,
-#           circle_radius = 11,
-#           circle_opacity = 0.92,
-#           circle_stroke_color = "#ffffff",
-#           circle_stroke_width = 1.2,
-#           tooltip = "tooltip_html"
-#         ) |>
-#         mapgl::add_symbol_layer(
-#           id = "hf_total",
-#           source = "hf",
-#           text_field = mapgl::get_column("total"),
-#           text_color = "#ffffff",
-#           text_size = 12,
-#           text_allow_overlap = TRUE
-#         ) |>
-#         # collision handling drops overlapping names rather than stacking them
-#         mapgl::add_symbol_layer(
-#           id = "hf_names",
-#           source = "hf",
-#           text_field = mapgl::get_column("hf_name"),
-#           text_size = 10,
-#           text_offset = c(0, 1.9),
-#           text_color = "#262626",
-#           text_halo_color = "#ffffff",
-#           text_halo_width = 1.5
-#         )
-#     })
-#
-#     output$map_footer <- shiny::renderUI({
-#       n_unmapped <- nrow(top()) - nrow(map_points())
-#       htmltools::div(
-#         class = "small text-muted",
-#         paste0(
-#           "Colour by total cases. ",
-#           n_unmapped,
-#           " structure(s) not located (informal or absent from the FOSA layer)."
-#         )
-#       )
-#     })
-#
-#     #* Distributions -------------------------------------------------------
-#     output$dist_n <- highcharter::renderHighchart({
-#       v <- visits_f()
-#       shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
-#
-#       v |>
-#         dplyr::summarise(.by = unique_id, value = dplyr::n_distinct(hf_name)) |>
-#         dplyr::pull(value) |>
-#         hc_count_bars("Structures visited (per case)", "Structures")
-#     })
-#
-#     output$dist_los <- highcharter::renderHighchart({
-#       v <- visits_f()
-#       shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
-#
-#       # negative stays are entry errors, already NA in prep
-#       v |>
-#         dplyr::filter(!is.na(los)) |>
-#         dplyr::pull(los) |>
-#         hc_count_bars("Length of stay per structure (days)", "Days")
-#     })
-#
-#     output$dist_footer <- shiny::renderUI({
-#       v <- visits_f()
-#       n_los <- sum(is.na(v$los))
-#       htmltools::div(
-#         class = "small text-muted",
-#         paste0(
-#           nrow(v), " visits by ", dplyr::n_distinct(v$unique_id), " cases; ",
-#           n_los, " without a valid length of stay."
-#         )
-#       )
-#     })
+    #* Top structures ------------------------------------------------------
+    # cases who started a visit in the `n` days up to and including `anchor`
+    n_seen <- function(patient, date, anchor, n) {
+      idx <- !is.na(date) & date >= anchor - (n - 1) & date <= anchor
+      dplyr::n_distinct(patient[idx])
+    }
+
+    # structures ranked by cases seen; 7/14/21 d windows are cumulative
+    top <- shiny::reactive({
+      shiny::req(anchor())
+      a <- anchor()
+      visits_f() |>
+        dplyr::summarise(
+          .by = c(raw_name, hf_name, hf_as, hf_zs),
+          total = dplyr::n_distinct(unique_id),
+          j7 = n_seen(unique_id, date_start_HF_visited, a, 7),
+          j14 = n_seen(unique_id, date_start_HF_visited, a, 14),
+          j21 = n_seen(unique_id, date_start_HF_visited, a, 21)
+        ) |>
+        dplyr::arrange(
+          dplyr::desc(total),
+          dplyr::desc(j21),
+          dplyr::desc(j14),
+          dplyr::desc(j7)
+        )
+    })
+
+    output$top_tbl <- reactable::renderReactable({
+      # raw_name is only the map's join key
+      d <- dplyr::select(top(), -raw_name)
+      shiny::validate(shiny::need(nrow(d) > 0, "No structure visited."))
+
+      domain <- c(0, max(d$j21))
+      # cell background from the colour ramp, scaled to the 21 d maximum
+      ramp_pal <- scales::colour_ramp(HF_CASE_RAMP)
+      count_col <- function(nm) {
+        reactable::colDef(
+          name = nm,
+          style = function(value) {
+            if (is.null(value) || is.na(value)) {
+              return(list())
+            }
+            frac <- max(
+              0,
+              min(1, (value - domain[1]) / (domain[2] - domain[1]))
+            )
+            list(background = ramp_pal(frac))
+          }
+        )
+      }
+
+      reactable::reactable(
+        d,
+        highlight = TRUE,
+        compact = TRUE,
+        pagination = FALSE,
+        # fixed height makes the body scroll, header stays pinned
+        height = 800,
+        defaultSorted = list(total = "desc"),
+        theme = reactable::reactableTheme(
+          style = list(fontSize = "0.82rem"),
+          headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
+          cellPadding = "4px 6px"
+        ),
+        defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+        columns = list(
+          hf_name = reactable::colDef(
+            name = "Structure",
+            align = "left",
+            sticky = "left",
+            minWidth = 170
+          ),
+          hf_as = reactable::colDef(name = "Health area", align = "left"),
+          hf_zs = reactable::colDef(name = "Health zone", align = "left"),
+          total = reactable::colDef(
+            name = "Total",
+            style = list(fontWeight = 600),
+            minWidth = 70
+          ),
+          j7 = count_col("7 d"),
+          j14 = count_col("14 d"),
+          j21 = count_col("21 d")
+        )
+      )
+    })
+
+    top_note <- shiny::reactive({
+      shiny::req(anchor())
+      htmltools::div(
+        class = "card-disclaimer",
+        paste0(
+          "Cases seen in the last 7 / 14 / 21 days to ",
+          format(anchor(), "%d %b %Y"),
+          ". ",
+          dplyr::n_distinct(visits_f()$unique_id),
+          " of ",
+          dplyr::n_distinct(df()$unique_id),
+          " filtered cases have a recorded visit."
+        )
+      )
+    })
+
+    #* Map -----------------------------------------------------------------
+    map_points <- shiny::reactive({
+      d <- top()
+      n_top <- nrow(d)
+      # only structures with coordinates in prep can be drawn
+      xy <- hf_cases |>
+        dplyr::filter(!is.na(lon)) |>
+        dplyr::select(raw_name, lon, lat)
+      d <- dplyr::inner_join(
+        d,
+        xy,
+        by = dplyr::join_by(raw_name),
+        relationship = "many-to-one"
+      )
+      stopifnot(nrow(d) <= n_top)
+      sf::st_as_sf(d, coords = c("lon", "lat"), crs = 4326) |>
+        dplyr::mutate(
+          tooltip_html = paste0(
+            "<b>",
+            hf_name,
+            "</b><br>",
+            hf_as,
+            " | ",
+            hf_zs,
+            "<br>Total: ",
+            total,
+            "<br>7 d: ",
+            j7,
+            " &middot; 14 d: ",
+            j14,
+            " &middot; 21 d: ",
+            j21
+          )
+        )
+    })
+
+    output$map <- mapgl::renderMaplibre({
+      pts <- map_points()
+
+      m <- mapgl::maplibre(
+        style = mapgl::carto_style("voyager"),
+        bounds = focus_bbox,
+        attributionControl = FALSE
+      ) |>
+        mapgl::add_source(id = "adm3", data = adm3) |>
+        mapgl::add_line_layer(
+          id = "adm3_line",
+          source = "adm3",
+          line_color = "#9a9a9a",
+          line_width = 1
+        ) |>
+        mapgl::add_source(id = "adm2", data = adm2) |>
+        mapgl::add_line_layer(
+          id = "adm2_line",
+          source = "adm2",
+          line_color = "#333333",
+          line_width = 1.8
+        )
+
+      if (nrow(pts) == 0) {
+        return(m)
+      }
+
+      rng <- range(pts$total)
+      fill <- if (rng[1] == rng[2]) {
+        HF_MAP_RAMP[1]
+      } else {
+        mapgl::interpolate(
+          column = "total",
+          values = rng,
+          stops = HF_MAP_RAMP
+        )
+      }
+
+      m |>
+        mapgl::add_source(id = "hf", data = pts) |>
+        mapgl::add_circle_layer(
+          id = "hf_circles",
+          source = "hf",
+          circle_color = fill,
+          circle_radius = 11,
+          circle_opacity = 0.92,
+          circle_stroke_color = "#ffffff",
+          circle_stroke_width = 1.2,
+          tooltip = "tooltip_html"
+        ) |>
+        mapgl::add_symbol_layer(
+          id = "hf_total",
+          source = "hf",
+          text_field = mapgl::get_column("total"),
+          text_color = "#ffffff",
+          text_size = 12,
+          text_allow_overlap = TRUE
+        ) |>
+        # collision handling drops overlapping names rather than stacking them
+        mapgl::add_symbol_layer(
+          id = "hf_names",
+          source = "hf",
+          text_field = mapgl::get_column("hf_name"),
+          text_size = 10,
+          text_offset = c(0, 1.9),
+          text_color = "#262626",
+          text_halo_color = "#ffffff",
+          text_halo_width = 1.5
+        )
+    })
+
+    #* Flow map ------------------------------------------------------------
+    # static: hf_flows has no case key, so the sidebar filters do not reach it
+    output$flow_map <- mapgl::renderMaplibre({
+      mapgl::maplibre(
+        style = mapgl::carto_style("voyager"),
+        bounds = focus_bbox,
+        attributionControl = FALSE
+      ) |>
+        mapgl::add_source(id = "adm2", data = adm2) |>
+        mapgl::add_line_layer(
+          id = "adm2_line",
+          source = "adm2",
+          line_color = "#333333",
+          line_width = 1.8
+        ) |>
+        mapgl::add_flowmap(
+          id = "hf_flows",
+          locations = flow_locations,
+          flows = flow_edges,
+          flow_lines_rendering_mode = "curved",
+          flow_location_labels_enabled = TRUE
+        )
+    })
+
+    output$map_disclaimer <- shiny::renderUI(map_note())
+    output$table_disclaimer <- shiny::renderUI(top_note())
+
+    map_note <- shiny::reactive({
+      n_unmapped <- nrow(top()) - nrow(map_points())
+      n_cases <- dplyr::n_distinct(df()$unique_id)
+      n_no_hf <- n_cases - dplyr::n_distinct(visits_f()$unique_id)
+      pct_no_hf <- if (n_cases > 0) 100 * n_no_hf / n_cases else NA_real_
+      htmltools::div(
+        class = "card-disclaimer",
+        paste0(
+          n_no_hf,
+          " of ",
+          n_cases,
+          " cases (",
+          sprintf("%.1f", pct_no_hf),
+          "%) have no health facility information. ",
+          n_unmapped,
+          " of ",
+          nrow(top()),
+          " facilities not located."
+        )
+      )
+    })
+
+    #* Distributions -------------------------------------------------------
+    output$dist_n <- highcharter::renderHighchart({
+      v <- visits_f()
+      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+
+      v |>
+        dplyr::summarise(.by = unique_id, value = dplyr::n_distinct(hf_name)) |>
+        dplyr::pull(value) |>
+        hc_count_bars("Structures visited (per case)", "Structures")
+    })
+
+    output$dist_los <- highcharter::renderHighchart({
+      v <- visits_f()
+      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+
+      # negative stays are entry errors, already NA in prep
+      v |>
+        dplyr::filter(!is.na(los)) |>
+        dplyr::pull(los) |>
+        hc_count_bars("Length of stay per structure (days)", "Days")
+    })
+
+    output$dist_footer <- shiny::renderUI({
+      v <- visits_f()
+      n_los <- sum(is.na(v$los))
+      htmltools::div(
+        class = "card-disclaimer",
+        paste0(
+          nrow(v),
+          " visits by ",
+          dplyr::n_distinct(v$unique_id),
+          " cases; ",
+          n_los,
+          " without a valid length of stay."
+        )
+      )
+    })
 
     #* Timeline ------------------------------------------------------------
-    shiny::observe({
-      choices <- sort(unique(visits_f()$hf_name))
-      # busiest non-CT/CTE structure by default; keep the pick while still valid
-      busiest <- visits_f() |>
-        dplyr::filter(!hf_name %in% HF_CTE_EXCLUDE) |>
-        dplyr::summarise(.by = hf_name, n = dplyr::n_distinct(unique_id)) |>
-        dplyr::arrange(dplyr::desc(n)) |>
-        dplyr::pull(hf_name)
-      current <- shiny::isolate(input$tl_facility)
-      selected <- if (!is.null(current) && current %in% choices) {
-        current
-      } else {
-        c(busiest, choices)[1]
-      }
-      shiny::updateSelectInput(
-        session,
-        "tl_facility",
-        choices = choices,
-        selected = selected
-      )
-    })
-
-    # one row per case; unique_id is minted per case in prep
-    cases_tl <- shiny::reactive({
-      df() |>
+    # the module reads wide visit slots, so rebuild them from the long table
+    tl_df <- shiny::reactive({
+      cases <- df() |>
         dplyr::distinct(unique_id, .keep_all = TRUE) |>
-        dplyr::semi_join(visits_f(), by = dplyr::join_by(unique_id)) |>
         dplyr::transmute(
           unique_id,
-          label = paste0(
-            unique_id,
-            " (", substr(as.character(sex), 1, 1), round(age), ")"
-          ),
-          outcome = as.character(type_of_exit),
-          date_onset = as.Date(date_symptom_onset),
-          date_exit = as.Date(date_exit_eff)
-        )
-    })
-
-    tl_data <- shiny::reactive({
-      cases <- cases_tl() |>
-        dplyr::filter(!is.na(date_onset))
-      v <- visits_f()
-
-      # waits for the picker to be populated with its default structure
-      fac <- shiny::req(input$tl_facility)
-      keep <- v$unique_id[v$hf_name == fac]
-      cases <- dplyr::filter(cases, unique_id %in% keep)
-
-      n_max <- input$tl_max
-      if (is.null(n_max) || is.na(n_max) || n_max < 1) {
-        n_max <- 30
-      }
-      cases <- cases |>
-        dplyr::arrange(dplyr::desc(date_onset)) |>
-        dplyr::slice_head(n = n_max) |>
-        dplyr::arrange(date_onset) |>
-        # cases still in care run to the latest notification
-        dplyr::mutate(
-          end_date = dplyr::coalesce(date_exit, anchor()),
-          y = dplyr::row_number() - 1L
+          age = round(age),
+          # first letter only, so "Male" / "Homme" map to M / H
+          sex = substr(as.character(sex), 1, 1),
+          type_of_exit = as.character(type_of_exit),
+          date_symptom_onset = as.Date(date_symptom_onset),
+          date_exit_eff = as.Date(date_exit_eff)
         )
 
-      visits <- v |>
-        dplyr::filter(!is.na(date_start_HF_visited)) |>
-        dplyr::inner_join(
-          cases[c("unique_id", "y", "end_date")],
-          by = dplyr::join_by(unique_id),
-          relationship = "many-to-one"
-        ) |>
-        dplyr::mutate(
-          is_last = date_start_HF_visited == max(date_start_HF_visited),
-          .by = unique_id
-        ) |>
-        dplyr::mutate(
-          # +1 so the last day fills its cell
-          hf_end = dplyr::case_when(
-            !is.na(date_end_HF_visited) &
-              date_end_HF_visited >= date_start_HF_visited ~
-              date_end_HF_visited + 1,
-            is_last ~ end_date + 1,
-            .default = date_start_HF_visited + 1
-          ),
-          # initials, e.g. "CH La Guerison" -> "CLG"
-          abbr = hf_abbr
-        )
-
-      list(cases = cases, visits = visits)
-    })
-
-    output$timeline <- highcharter::renderHighchart({
-      tl <- tl_data()
-      cases <- tl$cases
-      shiny::validate(shiny::need(nrow(cases) > 0, "No case to display."))
-      visits <- tl$visits
-
-      to_ms <- function(d) as.numeric(as.POSIXct(as.Date(d), tz = "UTC")) * 1000
-      fmt <- function(d) format(d, "%d %b %Y")
-
-      bar_pts <- cases |>
+      # slot numbers repeat within a case (e.g. isolation is slot 6), so renumber
+      wide <- visits_f() |>
+        dplyr::arrange(unique_id, visit) |>
+        dplyr::mutate(visit = dplyr::row_number(), .by = unique_id) |>
         dplyr::transmute(
-          y,
-          x = to_ms(date_onset),
-          x2 = to_ms(end_date + 1),
-          color = HF_TL_DISEASE,
-          outcome = dplyr::coalesce(outcome, "In care"),
-          d_start = fmt(date_onset),
-          d_end = dplyr::if_else(is.na(date_exit), "ongoing", fmt(date_exit))
-        )
-
-      onset_pts <- cases |>
-        dplyr::transmute(
-          y,
-          x = to_ms(date_onset),
-          x2 = to_ms(date_onset + 1),
-          color = HF_TL_ONSET,
-          d_start = fmt(date_onset)
-        )
-
-      exit_pts <- cases |>
-        dplyr::filter(!is.na(date_exit)) |>
-        dplyr::transmute(
-          y,
-          x = to_ms(date_exit),
-          x2 = to_ms(date_exit + 1),
-          color = dplyr::if_else(
-            outcome == "Recovered",
-            HF_TL_RECOVERED,
-            HF_TL_DIED
-          ),
-          outcome,
-          d_end = fmt(date_exit)
-        )
-
-      hf_pts <- visits |>
-        dplyr::transmute(
-          y,
-          x = to_ms(date_start_HF_visited),
-          x2 = to_ms(hf_end),
-          color = "rgba(0,0,0,0)",
-          borderColor = "#262626",
-          hf_name,
-          abbr,
-          d_start = fmt(date_start_HF_visited),
-          d_end = fmt(hf_end - 1)
-        )
-
-      range_start <- min(c(cases$date_onset, visits$date_start_HF_visited))
-      range_end <- max(c(cases$end_date + 1, visits$hf_end))
-
-      highcharter::highchart() |>
-        highcharter::hc_chart(type = "xrange") |>
-        highcharter::hc_xAxis(
-          type = "datetime",
-          opposite = TRUE,
-          min = to_ms(range_start),
-          max = to_ms(range_end),
-          tickInterval = 7 * 24 * 3600 * 1000,
-          labels = list(format = "{value:%e %b}")
+          unique_id,
+          visit,
+          HF_name_visited = hf_name,
+          date_start_HF_visited,
+          date_end_HF_visited
         ) |>
-        highcharter::hc_yAxis(
-          categories = cases$label,
-          reversed = TRUE,
-          title = list(text = NULL)
-        ) |>
-        # grouping = FALSE overlays the series on one row instead of stacking
-        highcharter::hc_plotOptions(
-          xrange = list(pointWidth = 14, borderRadius = 0, grouping = FALSE)
-        ) |>
-        highcharter::hc_add_series(
-          name = "Illness",
-          data = highcharter::list_parse(bar_pts),
-          tooltip = list(
-            headerFormat = "",
-            pointFormat = "<b>Illness ({point.outcome})</b><br>Onset: {point.d_start}<br>Exit: {point.d_end}"
+        tidyr::pivot_wider(
+          names_from = visit,
+          names_sep = "",
+          values_from = c(
+            HF_name_visited,
+            date_start_HF_visited,
+            date_end_HF_visited
           )
-        ) |>
-        highcharter::hc_add_series(
-          name = "Structures",
-          data = highcharter::list_parse(hf_pts),
-          dataLabels = list(enabled = TRUE, format = "{point.abbr}"),
-          tooltip = list(
-            headerFormat = "",
-            pointFormat = "<b>{point.hf_name}</b><br>{point.d_start} to {point.d_end}"
-          )
-        ) |>
-        # onset and exit last so they stay above the structure rectangles
-        highcharter::hc_add_series(
-          name = "Onset",
-          data = highcharter::list_parse(onset_pts),
-          tooltip = list(
-            headerFormat = "",
-            pointFormat = "<b>Onset</b><br>{point.d_start}"
-          )
-        ) |>
-        highcharter::hc_add_series(
-          name = "Exit",
-          data = highcharter::list_parse(exit_pts),
-          tooltip = list(
-            headerFormat = "",
-            pointFormat = "<b>Exit ({point.outcome})</b><br>{point.d_end}"
-          )
-        ) |>
-        highcharter::hc_legend(enabled = FALSE)
-    })
-
-    output$tl_footer <- shiny::renderUI({
-      all_cases <- cases_tl()
-      n_no_onset <- sum(is.na(all_cases$date_onset))
-      htmltools::div(
-        class = "small text-muted",
-        paste0(
-          "Latest ", nrow(tl_data()$cases), " cases by onset, from the ",
-          nrow(all_cases), " with a recorded visit; ",
-          n_no_onset, " without onset date cannot be drawn. ",
-          "Cases still in care run to the latest notification."
         )
+
+      # inner join: cases without a recorded visit have nothing to draw
+      out <- dplyr::inner_join(
+        cases,
+        wide,
+        by = dplyr::join_by(unique_id),
+        relationship = "one-to-one"
       )
+      stopifnot(nrow(out) <= nrow(cases))
+      out
     })
+
+    mod_timeline_server(
+      "timeline",
+      df = tl_df,
+      male_values = c("M", "H")
+    )
   })
 }

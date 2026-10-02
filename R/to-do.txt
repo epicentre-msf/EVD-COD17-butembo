@@ -1,8 +1,8 @@
 BENI datasets
 
-- [ ] check transmission only for confirmed as we filter
+- [ ] check transmission only for confirmed as we filter
 
 UPDATE SERVER
 
 - git pull on server: ssh episerv "cd EVD-COD17-butembo && git pull"
-- update the dataset: run data_prep with UPDATE_SERVER as TRUE
+- update the dataset: run 1_prep_data.R with SEND_TO_SERVER as TRUE

@@ -261,25 +261,7 @@ match_vars <- c(
   "adm3_name__res"
 )
 
-# name fallback for the pre-ETC cases, which have no id_msf; normalised
-# so accents and case do not split the same patient
-norm_key <- \(x) {
-  x |>
-    stringi::stri_trans_general("Latin-ASCII") |>
-    str_squish() |>
-    str_to_upper()
-}
-add_key <- \(d) {
-  d |>
-    mutate(
-      match_key = if_else(
-        !is.na(id_msf),
-        norm_key(as.character(id_msf)),
-        norm_key(nom)
-      )
-    )
-}
-
+# name fallback keys for the pre-ETC cases, which have no id_msf
 matched_all <- add_key(matched_all)
 vax_ll <- add_key(vax_ll)
 
@@ -294,26 +276,10 @@ stopifnot(
   "vax_ll has duplicate match_key" = !anyDuplicated(vax_ll$match_key)
 )
 
-to_long <- \(d, version) {
-  d |>
-    select(all_of(c("match_key", match_vars))) |>
-    # blank cells and "NA" text from excel must not differ from a true NA
-    mutate(across(
-      all_of(match_vars),
-      \(x) na_if(str_squish(as.character(x)), "") |> na_if("NA")
-    )) |>
-    pivot_longer(
-      all_of(match_vars),
-      names_to = "variable",
-      values_to = "value"
-    ) |>
-    mutate(version = version)
-}
-
 # patients in both versions; NA -> value counts as a change, value -> NA does not
 vax_changed <- bind_rows(
-  to_long(matched_ll, "old"),
-  to_long(vax_ll, "new")
+  to_long(matched_ll, "old", match_vars),
+  to_long(vax_ll, "new", match_vars)
 ) |>
   pivot_wider(names_from = version, values_from = value) |>
   filter(
@@ -399,23 +365,29 @@ export_clean(
 
 fs::dir_create(c(vax_ll_out_dir, to_match_dir))
 
-rio::export(
+qxl::qxl(
   vax_ll,
-  fs::path(
+  file = fs::path(
     vax_ll_out_dir,
     glue::glue(
       "{CONFIG$export_prefix}_vaccinated-linelist__{time_write_hm}.xlsx"
     )
-  )
+  ),
+  filter = TRUE
 )
 
-rio::export(
-  to_rematch,
-  fs::path(
-    to_match_dir,
-    glue::glue("{CONFIG$export_prefix}_to-be-matched__{time_write_hm}.xlsx")
+if (nrow(to_rematch) > 0) {
+  qxl::qxl(
+    to_rematch,
+    file = fs::path(
+      to_match_dir,
+      glue::glue("{CONFIG$export_prefix}_to-be-matched__{time_write_hm}.xlsx")
+    ),
+    filter = TRUE
   )
-)
+} else {
+  cli::cli_inform("0 patients to send for matching, no file saved")
+}
 
 #* DHIS2 IDS ------------------------------------------------------------------------------------
 

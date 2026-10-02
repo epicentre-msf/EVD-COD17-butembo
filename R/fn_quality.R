@@ -148,9 +148,9 @@ completeness_table <- function(dd) {
     dplyr::select(section, variable, pct_complete)
 }
 
-# one row per location type, paired "recorded %"/"matched %" columns per
-# admin level - recorded = name non-missing, matched = name resolved to a
-# pcode, both out of all rows (not just the recorded ones)
+# one row per location type, three columns per admin level: recorded (name
+# non-missing, % of all rows), matched (name resolved to a pcode, % of the
+# recorded names) and matched % of all rows
 geo_match_summary_wide <- function(d) {
   n_all <- nrow(d)
   purrr::map_dfr(names(GEO_LOC_TYPES), function(lt) {
@@ -160,22 +160,31 @@ geo_match_summary_wide <- function(d) {
       name_col <- paste0("adm", lvl, "_name__", lt)
       pcode_col <- paste0("adm", lvl, "_pcode__", lt)
       rec_lab <- paste0(lvl_lab, " recorded %")
-      match_lab <- paste0(lvl_lab, " matched %")
+      match_lab <- paste0(lvl_lab, " matched % of recorded")
+      all_lab <- paste0(lvl_lab, " matched % of all")
       if (!all(c(name_col, pcode_col) %in% names(d))) {
         row[[rec_lab]] <- NA_real_
         row[[match_lab]] <- NA_real_
+        row[[all_lab]] <- NA_real_
         next
       }
       recorded <- !is.na(d[[name_col]])
       matched <- recorded & !is.na(d[[pcode_col]])
       row[[rec_lab]] <- 100 * sum(recorded) / n_all
-      row[[match_lab]] <- 100 * sum(matched) / n_all
+      row[[match_lab]] <- if (any(recorded)) {
+        100 * sum(matched) / sum(recorded)
+      } else {
+        NA_real_
+      }
+      row[[all_lab]] <- 100 * sum(matched) / n_all
     }
     tibble::as_tibble(row)
   })
 }
 
-# distinct recorded names that never resolved to a pcode, most frequent first
+# distinct recorded name + parent pairs that never resolved to a pcode, most
+# frequent first. Parent keeps same-named areas in two zones apart; Reason
+# separates a bad name from one that failed because its parent did.
 geo_unmatched <- function(d) {
   purrr::map_dfr(names(GEO_LOC_TYPES), function(lt) {
     purrr::map_dfr(names(GEO_LEVELS_Q), function(lvl_lab) {
@@ -185,19 +194,45 @@ geo_unmatched <- function(d) {
       if (!all(c(name_col, pcode_col) %in% names(d))) {
         return(NULL)
       }
+      parent_name_col <- paste0("adm", lvl - 1L, "_name__", lt)
+      parent_pcode_col <- paste0("adm", lvl - 1L, "_pcode__", lt)
+      has_parent <- lvl > 1L && all(c(parent_name_col, parent_pcode_col) %in% names(d))
       d |>
         dplyr::filter(!is.na(.data[[name_col]]), is.na(.data[[pcode_col]])) |>
-        dplyr::count(raw_name = .data[[name_col]], name = "n") |>
+        dplyr::mutate(
+          parent = if (has_parent) .data[[parent_name_col]] else NA_character_,
+          reason = if (has_parent) {
+            dplyr::if_else(
+              is.na(.data[[parent_pcode_col]]),
+              "Parent unmatched",
+              "Name not in geobase"
+            )
+          } else {
+            "Name not in geobase"
+          }
+        ) |>
+        dplyr::count(
+          raw_name = .data[[name_col]],
+          parent,
+          reason,
+          name = "n"
+        ) |>
         dplyr::mutate(group = paste0(GEO_LOC_TYPES[[lt]], " – ", lvl_lab)) |>
         dplyr::arrange(dplyr::desc(n)) |>
-        dplyr::select(group, raw_name, n)
+        dplyr::select(group, raw_name, parent, reason, n)
     })
   })
 }
 
 unmatched_display <- function(d) {
   geo_unmatched(d) |>
-    dplyr::rename(Location = group, `Recorded name` = raw_name, `N rows` = n)
+    dplyr::rename(
+      Location = group,
+      `Recorded name` = raw_name,
+      Parent = parent,
+      Reason = reason,
+      `N rows` = n
+    )
 }
 
 # all three tables in the shape mod_quality_server() reads

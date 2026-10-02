@@ -30,7 +30,8 @@ mod_map_place_ui <- function(id, full_screen = TRUE) {
     full_screen = full_screen,
     bslib::card_header(
       class = "d-flex align-items-center",
-      tags$span(class = "fw-semibold me-auto", "Place"),
+      tags$span(class = "fw-semibold me-3", "Place"),
+      tags$div(class = "me-auto", uiOutput(ns("footer"))),
       tags$div(
         class = "d-flex align-items-center gap-2",
         shiny::selectizeInput(
@@ -67,8 +68,7 @@ mod_map_place_ui <- function(id, full_screen = TRUE) {
           )
         )
       )
-    ),
-    bslib::card_footer(uiOutput(ns("footer")))
+    )
   )
 }
 
@@ -176,17 +176,11 @@ mod_map_place_server <- function(
         m <- 1
       }
 
-      bbox <- sf::st_bbox(init_geo)
-      pad_x <- (bbox["xmax"] - bbox["xmin"]) * 0.05
-      pad_y <- (bbox["ymax"] - bbox["ymin"]) * 0.05
-      bbox[c("xmin", "xmax")] <- bbox[c("xmin", "xmax")] + c(-pad_x, pad_x)
-      bbox[c("ymin", "ymax")] <- bbox[c("ymin", "ymax")] + c(-pad_y, pad_y)
-
       ls <- admin_line_style(match(init_level, BOUNDARY_LEVELS))
 
       map <- mapgl::maplibre(
         style = mapgl::carto_style("voyager"),
-        bounds = bbox,
+        bounds = focus_bbox,
         attributionControl = FALSE
       ) |>
         mapgl::add_source(id = "geo", data = init_geo) |>
@@ -261,7 +255,12 @@ mod_map_place_server <- function(
       proxy <- mapgl::maplibre_proxy("map")
       mapgl::set_source(proxy, "geo_fill", d_geo)
       mapgl::set_source(proxy, "bubbles", d_bub)
-      mapgl::set_paint_property(proxy, "bubbles", "circle-radius", bubble_radius_expr(m))
+      mapgl::set_paint_property(
+        proxy,
+        "bubbles",
+        "circle-radius",
+        bubble_radius_expr(m)
+      )
       mapgl::set_paint_property(
         proxy,
         "bubble_highlight",
@@ -278,7 +277,12 @@ mod_map_place_server <- function(
         proxy <- mapgl::maplibre_proxy("map")
         mapgl::set_paint_property(proxy, "geo_border", "line-color", ls$color)
         mapgl::set_paint_property(proxy, "geo_border", "line-width", ls$width)
-        mapgl::set_paint_property(proxy, "geo_border", "line-opacity", ls$opacity)
+        mapgl::set_paint_property(
+          proxy,
+          "geo_border",
+          "line-opacity",
+          ls$opacity
+        )
       },
       ignoreInit = TRUE
     )
@@ -341,18 +345,17 @@ mod_map_place_server <- function(
         "residence"
       }
       glue::glue(
-        "Missing/unknown {tolower(active_geo()$layer_name)} of \\
+        "Missing {tolower(active_geo()$layer_name)} of \\
          {loc_lab} for {lab} patients"
       )
     })
 
     output$footer <- renderUI({
       req(missing_text())
-      tags$small(
-        tags$div(
-          HTML('<i class="fa fa-exclamation-triangle" style="color:red;"></i>'),
-          missing_text()
-        )
+      tags$div(
+        class = "card-disclaimer",
+        HTML('<i class="fa fa-exclamation-triangle"></i>'),
+        missing_text()
       )
     })
 
@@ -370,18 +373,23 @@ mod_map_place_server <- function(
       vals <- if (length(brks) == 0) m else brks
       radii <- bubble_radius_px(vals, m)
       htmltools::tagList(
-        htmltools::div(style = "font-weight: 600; margin-bottom: 4px;", "Cases"),
+        htmltools::div(
+          style = "font-weight: 600; margin-bottom: 4px;",
+          "Cases"
+        ),
         htmltools::div(
           style = "display: flex; gap: 14px; align-items: flex-end;",
           purrr::map2(vals, radii, function(v, r) {
             htmltools::div(
               style = "display: flex; flex-direction: column; align-items: center;",
-              htmltools::div(style = sprintf(
-                "width: %fpx; height: %fpx; background: %s; opacity: 0.70; border: 1px solid #fff; border-radius: 50%%;",
-                r * 2,
-                r * 2,
-                MAP_BUBBLE_COL
-              )),
+              htmltools::div(
+                style = sprintf(
+                  "width: %fpx; height: %fpx; background: %s; opacity: 0.70; border: 1px solid #fff; border-radius: 50%%;",
+                  r * 2,
+                  r * 2,
+                  MAP_BUBBLE_COL
+                )
+              ),
               htmltools::div(
                 style = "margin-top: 3px;",
                 format(v, big.mark = " ", scientific = FALSE)
@@ -442,7 +450,11 @@ zoom_interp <- function(...) {
 
 admin_line_style <- function(level_idx) {
   styles <- list(
-    list(color = "#555555", width = zoom_interp(5, 1.2, 7, 1.6, 10, 2.2), opacity = 0.9),
+    list(
+      color = "#555555",
+      width = zoom_interp(5, 1.2, 7, 1.6, 10, 2.2),
+      opacity = 0.9
+    ),
     list(
       color = "#666666",
       width = zoom_interp(5, 0.25, 7, 0.6, 9, 0.9, 11, 1.4),
@@ -458,7 +470,12 @@ admin_line_style <- function(level_idx) {
 }
 
 hover_opacity_expr <- function(hover_opacity = 0.55) {
-  list("case", list("boolean", list("feature-state", "hover"), FALSE), hover_opacity, 0)
+  list(
+    "case",
+    list("boolean", list("feature-state", "hover"), FALSE),
+    hover_opacity,
+    0
+  )
 }
 
 tt_html <- function(name, total) {

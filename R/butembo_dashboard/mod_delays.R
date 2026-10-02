@@ -787,15 +787,7 @@ plot_delay_bar <- function(
         pointFormat = '{point.tooltip}'
       )
   } else {
-    n_groups <- dplyr::n_distinct(hc_df[[group_var]])
-    missing_data <- getOption("epishiny.na.label", "(Missing)") %in%
-      unique(hc_df[[group_var]])
-    pal <- epishiny:::prepare_palette(
-      n_groups,
-      missing_data,
-      pal = epishiny:::epi_pals()$aurora,
-      na_colour = "#666666"
-    )
+    pal <- group_colours(group_var, levels(factor(hc_df[[group_var]])))
     hc <- highcharter::highchart() |>
       highcharter::hc_chart(type = "column", zoomtype = "x") |>
       highcharter::hc_add_series(

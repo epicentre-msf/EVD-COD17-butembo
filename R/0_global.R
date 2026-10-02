@@ -8,9 +8,7 @@ suppressPackageStartupMessages({
   library(tidyverse)
 })
 
-source(here::here("R", "theme.R"))
 source(here::here("R", "utils.R"))
-source(here::here("R", "map_theme.R"))
 
 #* CONFIG ------------------------------------------------
 
@@ -38,16 +36,6 @@ CONFIG <- list(
 #* SHAREPOINT PATH ------------------------------
 onedrive <- Sys.getenv("SHAREPOINT_PATH")
 
-# Epicentre compilation
-epicentre_clean_cod_data_path <- fs::path(
-  onedrive,
-  "Epi Platform-BVD – Data and Tools - Documents",
-  "Data",
-  "data",
-  "COD",
-  "linelist"
-)
-
 #* BUTEMBO PATH ------------------------------------
 
 if (Sys.info()[["nodename"]] == "dell-ff") {
@@ -68,6 +56,14 @@ if (Sys.info()[["nodename"]] == "dell-ff") {
 butembo_project_data_path <- fs::path(
   butembo_project_path,
   "Donnees"
+)
+
+hf_flow_gis_path <- fs::path(
+  butembo_project_data_path,
+  "spatiale",
+  "etablissements_sante",
+  "Nombre de cas par FOSA",
+  "cod_butembo_itinéraires_cas_confirmés.json"
 )
 
 #*TRASMISSION DATA
@@ -108,15 +104,6 @@ butembo_project_sf_data_path <- fs::path(
   "spatiale"
 )
 
-#* Sitreps summary ------------------
-
-sitrep_path <- fs::path(
-  butembo_project_data_path,
-  "brute",
-  "sitrep",
-  "sitrep_summary.xlsx"
-)
-
 #* LABORATORY DATA ------------------
 lab_dir <- fs::path(butembo_project_data_path, "brute", "labo")
 
@@ -146,23 +133,7 @@ butembo_share_data_path <- fs::path(
   "partage"
 )
 
-# matched facilities with confirmed-case counts, GeoJSON
-hf_cases_json <- fs::path(
-  butembo_project_data_path,
-  "spatiale",
-  "etablissements_sante",
-  "Nombre de cas par FOSA",
-  "cod_butembo_nb_cas_par_fosa.json"
-)
-
-# nominative ETC export and the matched vaccinated files, used by vaccinated_cases.R
-etc_export_nominatif_dir <- fs::path(
-  butembo_project_data_path,
-  "linelists",
-  "cte_kitatumba",
-  "export_nominatif"
-)
-
+# matched vaccinated linelists, used by vaccinated_cases.R
 butembo_matched_ll_dir <- fs::path(
   onedrive,
   "Ebola Outbreaks - COD_UGA-2026",
@@ -176,14 +147,18 @@ check_match_dir <- fs::path(butembo_matched_ll_dir, "check-match")
 vax_ll_out_dir <- fs::path(butembo_matched_ll_dir, "vaccinated_linelist")
 to_match_dir <- fs::path(butembo_matched_ll_dir, "to-be-matched")
 
+# LL facility names matched to the master geobase, with a geometry
+hf_geo_csv <- fs::path(
+  butembo_project_sf_data_path,
+  "etablissements_sante",
+  "cod_butembo_matching_LL_GIS_MDB.csv"
+)
+
 local_dir <- here::here("local")
 local_geobase_dir <- fs::path(local_dir, "geobase")
 local_ll_dir <- fs::path(local_dir, "linelist")
 local_hf_dir <- fs::path(local_dir, "hf-visits")
-local_hf_cases_json <- fs::path(
-  local_hf_dir,
-  "cod_butembo_nb_cas_par_fosa.json"
-)
+local_hf_geo_csv <- fs::path(local_hf_dir, fs::path_file(hf_geo_csv))
 
 fs::dir_create(c(local_geobase_dir, local_ll_dir, local_hf_dir))
 

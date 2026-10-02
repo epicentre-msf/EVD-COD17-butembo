@@ -12,7 +12,11 @@ mod_epicurve_hz_ui <- function(id) {
 
   bslib::card(
     full_screen = TRUE,
-    bslib::card_header(shiny::textOutput(ns("plot_title"), inline = TRUE)),
+    bslib::card_header(
+      class = "d-flex align-items-center flex-wrap gap-3",
+      shiny::textOutput(ns("plot_title"), inline = TRUE),
+      shiny::uiOutput(ns("footnote"))
+    ),
     bslib::card_body(
       bslib::layout_sidebar(
         fillable = TRUE,
@@ -79,8 +83,7 @@ mod_epicurve_hz_ui <- function(id) {
           shiny::plotOutput(ns("plot"), height = "100%")
         )
       )
-    ),
-    bslib::card_footer(shiny::textOutput(ns("footnote")))
+    )
   )
 }
 
@@ -111,14 +114,17 @@ mod_epicurve_hz_server <- function(id, df) {
         dplyr::mutate(hz = dplyr::coalesce(as.character(.data[[lvl]]), "(Missing)"))
     })
 
-    output$footnote <- shiny::renderText({
+    output$footnote <- shiny::renderUI({
       n_all <- nrow(df_zones())
       n_dropped <- n_all - nrow(df_dated())
-      paste0(
-        n_dropped, " of ", n_all, " cases (",
-        sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), "%) resident in ",
-        paste(EPICURVE_HZ_ZONES, collapse = ", "),
-        " have no ", date_lab(), " and are not shown."
+      htmltools::div(
+        class = "card-disclaimer",
+        paste0(
+          n_dropped, " of ", n_all, " cases (",
+          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), "%) resident in ",
+          paste(EPICURVE_HZ_ZONES, collapse = ", "),
+          " have no ", date_lab(), " and are not shown."
+        )
       )
     })
 

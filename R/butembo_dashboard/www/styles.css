@@ -131,3 +131,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Data-loss notices sit at the top of their card, never muted. */
+.card-disclaimer,
+.card-disclaimer * {
+  color: darkred !important;
+}
+.card-disclaimer {
+  font-weight: 700;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}

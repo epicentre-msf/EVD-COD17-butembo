@@ -3,7 +3,6 @@
 # rsyncs app_data.rds to the evd-2026-app dashboard on episerv.
 
 #* TODO ------------------------------------
-# - [ ] lab tab: set lab_path in 0_global.R, import and clean lab data
 
 #* CONFIG ------------------------------------
 
@@ -147,7 +146,8 @@ ll_narr_clean <- ll_narr |>
     # split "site | aire de santé | zone de santé" into 3 columns
     adm3_isolation = str_squish(str_split_i(isolation_site_id, fixed("|"), 2)),
     adm2_isolation = str_squish(str_split_i(isolation_site_id, fixed("|"), -1)),
-    isolation_site_id = str_squish(str_split_i(
+    # isolation_site_id keeps the full string: it is the key into the HF matching table
+    isolation_site_name = str_squish(str_split_i(
       isolation_site_id,
       fixed("|"),
       1
@@ -195,12 +195,12 @@ ll_narr_clean <- ll_narr |>
     # ! Isolated in an ETC ?
     # both sites took ordinary patients before these dates
     isolated_etc = case_when(
-      isolation_site_id == "HGR Katwa" &
+      isolation_site_name == "HGR Katwa" &
         date_admission_eff >= as.Date("2026-06-15") &
         # unknown counts as alive at notification, so the cohort keeps them
         !dead_upon_notif %in% TRUE ~ TRUE,
       # an MSF id also marks a Kitatumba admission, whatever the date
-      isolation_site_id %in%
+      isolation_site_name %in%
         c("HGR Kitatumba", "CTE Kitatumba") &
         (date_admission_eff >= as.Date("2026-07-01") | !is.na(id_msf)) &
         !dead_upon_notif %in% TRUE ~ TRUE,
@@ -209,9 +209,9 @@ ll_narr_clean <- ll_narr |>
 
     # ! Which ETC ?
     etc_site = case_when(
-      isolated_etc & isolation_site_id == "HGR Katwa" ~ "CTE Katwa (MEDAIR)",
+      isolated_etc & isolation_site_name == "HGR Katwa" ~ "CTE Katwa (MEDAIR)",
       isolated_etc &
-        isolation_site_id %in% c("HGR Kitatumba", "CTE Kitatumba") ~
+        isolation_site_name %in% c("HGR Kitatumba", "CTE Kitatumba") ~
         "CTE Kitatumba (MSF)"
     ),
 
@@ -235,48 +235,58 @@ ll_narr_clean <- ll_narr |>
   # ! ONSET
   left_join(
     select(adm1_nosf, adm1_name, adm1_pcode__onset = adm1_pcode),
-    join_by(adm1_name__onset == adm1_name)
+    join_by(adm1_name__onset == adm1_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm2_nosf, adm2_name, adm2_pcode__onset = adm2_pcode),
-    join_by(adm2_name__onset == adm2_name)
+    join_by(adm2_name__onset == adm2_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm3_nosf, adm3_name, adm3_pcode__onset = adm3_pcode, adm2_pcode),
-    join_by(adm2_pcode__onset == adm2_pcode, adm3_name__onset == adm3_name)
+    join_by(adm2_pcode__onset == adm2_pcode, adm3_name__onset == adm3_name),
+    relationship = "many-to-one"
   ) |>
 
   # ! NOTIFICATION
   left_join(
     select(adm1_nosf, adm1_name, adm1_pcode__notif = adm1_pcode),
-    join_by(adm1_name__notif == adm1_name)
+    join_by(adm1_name__notif == adm1_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm2_nosf, adm2_name, adm2_pcode__notif = adm2_pcode),
-    join_by(adm2_name__notif == adm2_name)
+    join_by(adm2_name__notif == adm2_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm3_nosf, adm3_name, adm3_pcode__notif = adm3_pcode, adm2_pcode),
-    join_by(adm3_name__notif == adm3_name, adm2_pcode__notif == adm2_pcode)
+    join_by(adm3_name__notif == adm3_name, adm2_pcode__notif == adm2_pcode),
+    relationship = "many-to-one"
   ) |>
 
   # ! RESIDENCE
   left_join(
     select(adm1_nosf, adm1_name, adm1_pcode__res = adm1_pcode),
-    join_by(adm1_name__res == adm1_name)
+    join_by(adm1_name__res == adm1_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm2_nosf, adm2_name, adm2_pcode__res = adm2_pcode),
-    join_by(adm2_name__res == adm2_name)
+    join_by(adm2_name__res == adm2_name),
+    relationship = "many-to-one"
   ) |>
   left_join(
     select(adm3_nosf, adm3_name, adm3_pcode__res = adm3_pcode, adm2_pcode),
-    join_by(adm3_name__res == adm3_name, adm2_pcode__res == adm2_pcode)
+    join_by(adm3_name__res == adm3_name, adm2_pcode__res == adm2_pcode),
+    relationship = "many-to-one"
   ) |>
   # ! COMPTABILISATION
   left_join(
     select(adm2_nosf, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
-    join_by(adm2_comptabilisation == adm2_name)
+    join_by(adm2_comptabilisation == adm2_name),
+    relationship = "many-to-one"
   ) |>
 
   rename(pid = patient_site_id) |>
@@ -338,14 +348,47 @@ saveRDS(
   )
 )
 
-
 #* HEALTH FACILITY VISITS ------------------
 
 # copied locally once; delete the local file to refresh from SharePoint
-if (!fs::file_exists(local_hf_cases_json)) {
-  fs::file_copy(hf_cases_json, local_hf_cases_json)
+if (!fs::file_exists(local_hf_geo_csv)) {
+  fs::file_copy(hf_geo_csv, local_hf_geo_csv)
 }
-hf_matched <- sf::read_sf(local_hf_cases_json)
+hf_geo_raw <- rio::import(local_hf_geo_csv) |>
+  as_tibble() |>
+  clean_names() |>
+  rename(raw_name = isolation_site_id)
+
+# x/y are Web Mercator metres; the app and flow mapper need lon/lat
+hf_xy <- hf_geo_raw |>
+  filter(!is.na(x), !is.na(y)) |>
+  select(raw_name, hf_pcode = pcode, x, y)
+hf_lonlat <- hf_xy |>
+  st_as_sf(coords = c("x", "y"), crs = 3857) |>
+  st_transform(4326)
+hf_xy <- hf_xy |>
+  mutate(
+    lon = st_coordinates(hf_lonlat)[, 1],
+    lat = st_coordinates(hf_lonlat)[, 2]
+  ) |>
+  select(raw_name, hf_pcode, lon, lat)
+cli::cli_alert_info(
+  "{nrow(hf_xy)} of {nrow(hf_geo_raw)} structures in the matching table have coordinates"
+)
+
+# isolation site as a final visit, same layout as the pivoted visit slots
+hf_isolation <- ll_narr_clean |>
+  filter(!is.na(isolation_site_id)) |>
+  transmute(
+    unique_id,
+    pid,
+    # after the five HF_name_visited slots
+    visit = 6L,
+    HF_name_visited = str_squish(isolation_site_id),
+    date_start_HF_visited = as.character(date_admission_eff),
+    date_end_HF_visited = as.character(date_exit_eff),
+    visit_type = "isolation"
+  )
 
 # one row per visit
 hf_visits <- ll_narr_clean |>
@@ -367,10 +410,15 @@ hf_visits <- ll_narr_clean |>
   ) |>
   rename_with(\(x) str_remove(x, "_$")) |>
   mutate(across(where(is.character), \(x) na_if(str_squish(x), ""))) |>
+  mutate(visit_type = "visited") |>
+  bind_rows(hf_isolation) |>
+  arrange(unique_id, visit) |>
   # drops the empty visit slots the wide layout leaves behind
   # filter(!is.na(HF_name_visited)) |>
   rename(hf_name = HF_name_visited) |>
   mutate(
+    # untouched export string: the key into the matching table
+    raw_name = hf_name,
     # "site | aire de santé | zone de santé" where the encoding is present
     hf_as = if_else(
       str_detect(hf_name, fixed("|")),
@@ -407,11 +455,131 @@ hf_visits <- ll_narr_clean |>
   # unique_id is the key app_data joins on; pid stays internal to prep
   select(-pid)
 
+# some cases list the whole pathway up to isolation, others stop before it
+hf_last_visited <- hf_visits |>
+  filter(visit_type == "visited", !is.na(hf_name)) |>
+  summarise(.by = unique_id, last_visited_name = last(hf_name))
+n_before <- nrow(hf_visits)
+n_iso <- sum(hf_visits$visit_type == "isolation")
+hf_visits <- hf_visits |>
+  left_join(
+    hf_last_visited,
+    by = join_by(unique_id),
+    relationship = "many-to-one"
+  ) |>
+  # isolation already recorded as the last visit would count the case twice
+  filter(
+    !(visit_type == "isolation" &
+      coalesce(hf_name == last_visited_name, FALSE))
+  ) |>
+  select(-last_visited_name)
+cli::cli_alert_info(
+  "{n_iso} isolation rows added; {n_before - nrow(hf_visits)} dropped as \\
+   the last recorded visit, {n_iso - (n_before - nrow(hf_visits))} kept"
+)
+
 
 cli::cli_alert_info(
   "{nrow(hf_visits)} visits recorded by \\
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
+
+# visits with no structure name cannot be counted or linked
+n_before <- nrow(hf_visits)
+hf_named <- hf_visits |>
+  filter(!is.na(raw_name))
+cli::cli_alert_info(
+  "{n_before - nrow(hf_named)} of {n_before} visits dropped: no structure name"
+)
+
+#* Cases per structure, geo-matched ----------
+hf_cases <- hf_named |>
+  summarise(
+    .by = c(raw_name, hf_name, hf_as, hf_zs),
+    n_cases = n_distinct(unique_id)
+  )
+n_before <- nrow(hf_cases)
+hf_cases <- hf_cases |>
+  left_join(
+    hf_xy,
+    by = join_by(raw_name),
+    relationship = "many-to-one"
+  )
+stopifnot(nrow(hf_cases) == n_before)
+
+# finest level at which each structure can be placed; "AS non définie" is a placeholder
+HF_PRECISION_LEVELS <- c(
+  "Health facility",
+  "Health area",
+  "Health zone",
+  "Not located"
+)
+hf_cases <- hf_cases |>
+  mutate(
+    precision = case_when(
+      !is.na(lon) ~ "Health facility",
+      !is.na(hf_as) & hf_as != "AS non définie" ~ "Health area",
+      !is.na(hf_zs) ~ "Health zone",
+      .default = "Not located"
+    ),
+    precision = factor(precision, levels = HF_PRECISION_LEVELS)
+  )
+
+cli::cli_alert_info(
+  "{sum(is.na(hf_cases$lon))} of {nrow(hf_cases)} structures \\
+   ({sum(hf_cases$n_cases[is.na(hf_cases$lon)])} case-visits) have no coordinates"
+)
+
+#* Flows between structures, geo-matched -----
+# consecutive visits per case, ordered by start date then visit slot
+hf_flows <- hf_named |>
+  arrange(unique_id, date_start_HF_visited, visit) |>
+  mutate(
+    from = raw_name,
+    to = lead(raw_name),
+    .by = unique_id
+  ) |>
+  filter(!is.na(to))
+n_pairs <- nrow(hf_flows)
+hf_flows <- hf_flows |>
+  filter(from != to)
+cli::cli_alert_info(
+  "{n_pairs - nrow(hf_flows)} of {n_pairs} consecutive pairs dropped: same structure twice"
+)
+hf_flows <- hf_flows |>
+  summarise(.by = c(from, to), n_cases = n_distinct(unique_id))
+n_before <- nrow(hf_flows)
+hf_flows <- hf_flows |>
+  left_join(
+    hf_xy |> rename_with(\(x) paste0("from_", x), -raw_name),
+    by = join_by(from == raw_name),
+    relationship = "many-to-one"
+  ) |>
+  left_join(
+    hf_xy |> rename_with(\(x) paste0("to_", x), -raw_name),
+    by = join_by(to == raw_name),
+    relationship = "many-to-one"
+  )
+stopifnot(nrow(hf_flows) == n_before)
+cli::cli_alert_info(
+  "{sum(is.na(hf_flows$from_lon) | is.na(hf_flows$to_lon))} of {n_before} \\
+   flows lack coordinates at one end and cannot be mapped"
+)
+
+
+# compare to GIS flow
+hf_flow_gis <- sf::st_read(hf_flow_gis_path, quiet = TRUE)
+cli::cli_alert_info(
+  "hf_flow_gis: {nrow(hf_flow_gis)} features, {unique(as.character(sf::st_geometry_type(hf_flow_gis)))}"
+)
+
+hf_flow_gis |>
+  filter(hf_depart == "HGR Kitatumba")
+
+hf_flows |>
+  filter(str_detect(from, "HGR Kitatumba")) |>
+  select(from, to)
+
 
 #* LAB DATA --------------------------------
 # Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
@@ -530,19 +698,70 @@ adm3 <- adm3 |>
   filter(adm3_pcode %in% adm3_pcode_used)
 
 # the app draws on a web basemap, so it needs lon/lat; done once here
-prep_app_layer <- function(x) {
-  x <- st_transform(x, 4326)
-  if (GEO_SIMPLIFY_TOL > 0) {
-    x <- st_simplify(x, dTolerance = GEO_SIMPLIFY_TOL, preserveTopology = TRUE)
-  }
-  x
-}
 adm1 <- prep_app_layer(adm1)
 adm2 <- prep_app_layer(adm2)
 adm3 <- prep_app_layer(adm3)
 
 #* Data-quality tables (Data quality tab) ----------------------------------
 quality <- build_quality(ll_narr_clean)
+
+# visited structures that could not be mapped, as the Health facilities pane reads them
+quality$hf_unmatched <- hf_named |>
+  anti_join(hf_xy, by = join_by(raw_name)) |>
+  summarise(
+    .by = c(raw_name, hf_name, hf_as, hf_zs),
+    `N visits` = n(),
+    `N cases` = n_distinct(unique_id)
+  ) |>
+  left_join(
+    select(hf_cases, raw_name, Precision = precision),
+    by = join_by(raw_name),
+    relationship = "many-to-one"
+  ) |>
+  mutate(
+    Reason = if_else(
+      raw_name %in% hf_geo_raw$raw_name,
+      "In matching table, no coordinates",
+      "Not in matching table"
+    )
+  ) |>
+  select(
+    Structure = hf_name,
+    `Health area` = hf_as,
+    `Health zone` = hf_zs,
+    Precision,
+    Reason,
+    `N visits`,
+    `N cases`
+  ) |>
+  arrange(Precision, desc(`N visits`))
+
+# structures, visits and cases by finest geographic level reached
+hf_precision <- hf_named |>
+  left_join(
+    select(hf_cases, raw_name, precision),
+    by = join_by(raw_name),
+    relationship = "many-to-one"
+  ) |>
+  summarise(
+    .by = precision,
+    n_structures = n_distinct(raw_name),
+    n_visits = n(),
+    n_cases = n_distinct(unique_id)
+  ) |>
+  arrange(precision)
+stopifnot(sum(hf_precision$n_visits) == nrow(hf_named))
+
+quality$hf_summary <- list(
+  n_total = nrow(hf_cases),
+  n_matched = sum(!is.na(hf_cases$lon)),
+  precision = hf_precision
+)
+stopifnot(
+  nrow(quality$hf_unmatched) ==
+    quality$hf_summary$n_total -
+      quality$hf_summary$n_matched
+)
 
 # variables with no section, or beyond the first two HF slots, are not shown
 n_quality_hidden <- length(setdiff(
@@ -569,6 +788,8 @@ app_data <- list(
   linelist = add_delay_pairs(ll_narr_clean, delay_dates),
   quality = quality,
   hf_visits = hf_visits,
+  hf_cases = hf_cases,
+  hf_flows = hf_flows,
   lab_data = lab_data,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
@@ -588,3 +809,27 @@ if (SEND_TO_SERVER) {
     )
   )
 }
+
+#* Summary of app_data ---------------------
+app_tables <- app_data[vapply(app_data, is.data.frame, logical(1))]
+app_tables_msg <- purrr::imap_chr(
+  app_tables,
+  \(x, nm) paste0(nm, ": ", nrow(x), " rows x ", ncol(x), " cols")
+)
+admin_msg <- purrr::imap_chr(
+  app_data$admin_data,
+  \(x, nm) paste0(nm, " (", nrow(x), ")")
+)
+cli::cli_h2(
+  "app_data: {fs::path_file(app_data_path)}, {fs::file_size(app_data_path)}"
+)
+cli::cli_bullets(c(
+  rlang::set_names(app_tables_msg, rep("i", length(app_tables_msg))),
+  "i" = "quality: {length(app_data$quality)} elements",
+  "i" = "admin_data features: {toString(admin_msg)}",
+  if (SEND_TO_SERVER) {
+    c("v" = "sent to episerv")
+  } else {
+    c("!" = "not sent to episerv")
+  }
+))

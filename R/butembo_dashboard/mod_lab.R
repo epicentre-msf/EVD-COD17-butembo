@@ -221,16 +221,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
       pal <- if (grp == "n") {
         "#9aa5b1"
       } else {
-        epishiny:::prepare_palette(
-          length(groups),
-          na_label %in% groups,
-          pal = if (grp == "lab_result") {
-            group_pal
-          } else {
-            epishiny:::epi_pals()$frost
-          },
-          na_colour = "#666666"
-        )
+        group_colours(grp, groups)
       }
       # line sits on same-coloured bars, so darken it to stay readable
       line_pal <- if (grp == "n") {

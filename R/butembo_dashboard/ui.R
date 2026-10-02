@@ -12,8 +12,12 @@ ui <- page_navbar(
       tags$link(
         rel = "stylesheet",
         type = "text/css",
-        href = "assets/styles.css"
-      )
+        href = paste0(
+          "assets/styles.css?v=",
+          as.integer(file.mtime("www/styles.css"))
+        )
+      ),
+      tags$script(src = "assets/recolour.js")
     )
   ),
   nav_menu(

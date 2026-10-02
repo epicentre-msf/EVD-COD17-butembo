@@ -96,9 +96,9 @@ mod_quality_ui <- function(id, quality) {
                   quality_explainer(
                     tags$p(
                       class = "mb-0",
-                      "Each cell shows the percentage of patients whose place ",
-                      "of residence, onset or notification is known at the ",
-                      "given admin level."
+                      "Each cell shows a percentage of patients whose place of ",
+                      "residence, onset or notification is known at the given ",
+                      "admin level."
                     ),
                     tags$ul(
                       class = "mb-0",
@@ -106,8 +106,16 @@ mod_quality_ui <- function(id, quality) {
                         "<b>Recorded</b>: a location was entered in the linelist"
                       )),
                       tags$li(HTML(paste0(
-                        "<b>Matched</b>: the recorded location matched a valid ",
-                        "unit in the admin boundary geobase, so it can be mapped"
+                        "<b>Matched % of recorded</b>: share of recorded ",
+                        "locations that matched a valid unit in the admin ",
+                        "boundary geobase, so can be mapped"
+                      ))),
+                      tags$li(HTML(
+                        "<b>Matched % of all</b>: the same, out of every patient"
+                      )),
+                      tags$li(HTML(paste0(
+                        "A health area only matches within a matched health ",
+                        "zone, so a zone failure also fails its health area"
                       )))
                     )
                   ),
@@ -145,6 +153,36 @@ mod_quality_ui <- function(id, quality) {
                     )
                   ),
                   reactable::reactableOutput(ns("geo_unmatched_table"), height = "100%")
+                ))
+              ),
+              nav_panel(
+                title = "Facility matching",
+                value = "hf_summary",
+                bslib::as_fill_carrier(htmltools::div(
+                  class = "mt-3",
+                  quality_explainer(
+                    tags$p(
+                      class = "mb-0",
+                      paste0(
+                        quality$hf_summary$n_matched, " of ",
+                        quality$hf_summary$n_total,
+                        " visited structures matched the facility file ",
+                        "with coordinates."
+                      )
+                    ),
+                    tags$ul(
+                      class = "mb-0",
+                      tags$li(HTML(paste0(
+                        "<b>Precision</b>: finest level at which a visited ",
+                        "structure can be placed: facility (coordinates), ",
+                        "else health area, else health zone"
+                      ))),
+                      tags$li(HTML(
+                        "<b>% of visits</b>: share of recorded visits (named structures only)"
+                      ))
+                    )
+                  ),
+                  reactable::reactableOutput(ns("hf_summary_table"), height = "100%")
                 ))
               ),
               nav_panel(
@@ -303,6 +341,30 @@ mod_quality_server <- function(id, quality) {
         searchable = TRUE,
         theme = rt_theme(cell_padding = "5px 10px"),
         defaultColDef = reactable::colDef(headerVAlign = "bottom")
+      )
+    })
+
+    output$hf_summary_table <- reactable::renderReactable({
+      p <- quality$hf_summary$precision
+      tbl <- data.frame(
+        Precision = as.character(p$precision),
+        Structures = p$n_structures,
+        Visits = p$n_visits,
+        `% of visits` = 100 * p$n_visits / sum(p$n_visits),
+        Cases = p$n_cases,
+        check.names = FALSE
+      )
+      reactable::reactable(
+        tbl,
+        compact = TRUE,
+        highlight = TRUE,
+        pagination = FALSE,
+        theme = rt_theme(),
+        defaultColDef = reactable::colDef(align = "center", headerVAlign = "bottom"),
+        columns = list(
+          Precision = reactable::colDef(align = "left"),
+          `% of visits` = reactable::colDef(format = reactable::colFormat(digits = 1, suffix = "%"))
+        )
       )
     })
 
