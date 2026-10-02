@@ -80,7 +80,7 @@ ui <- page_navbar(
         ),
         bslib::card(
           full_screen = TRUE,
-          min_height = 420,
+          min_height = 650,
           bslib::card_header("Delays between key events"),
           mod_delay_ui("delay")
         )

@@ -105,6 +105,23 @@ mod_delay_ui <- function(
         label = "Display labels",
         value = TRUE
       )
+    ),
+    div(
+      id = ns("trend_inputs"),
+      selectInput(
+        ns("trend_delays"),
+        label = "Select delays",
+        choices = NULL,
+        multiple = TRUE,
+        width = "100%"
+      ),
+      radioButtons(
+        inputId = ns("trend_agg"),
+        label = "Aggregate by",
+        choices = c("Week" = "week", "Month" = "month"),
+        selected = "week",
+        inline = TRUE
+      )
     )
   )
 
@@ -133,6 +150,12 @@ mod_delay_ui <- function(
       title = tags$span(bsicons::bs_icon("calendar-week-fill"), "Timeline"),
       value = "timeline_nav",
       highcharter::highchartOutput(ns("delay_timeline"))
+    ),
+
+    bslib::nav_panel(
+      title = tags$span(bsicons::bs_icon("graph-up"), "Trend"),
+      value = "trend_nav",
+      highcharter::highchartOutput(ns("delay_trend"))
     )
   )
 }
@@ -173,6 +196,15 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
         )
       })
 
+      observe({
+        shinyjs::toggle("trend_inputs", condition = input$tabs == "trend_nav")
+      })
+
+      # grouping is not used by the trend lines
+      observe({
+        shinyjs::toggle("group_var", condition = input$tabs != "trend_nav")
+      })
+
       # all possible date combinations
       date_combinations <- combn(date_vars, 2, simplify = FALSE)
 
@@ -195,6 +227,26 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
           session,
           "delays",
           choices = delay_choices
+        )
+      })
+
+      trend_choices <- delay_choices[
+        delay_choices %in%
+          c(
+            "date_symptom_onset__date_notification",
+            "date_symptom_onset__date_admission_eff",
+            "date_symptom_onset__date_exit_eff",
+            "date_notification__date_lab_result_1",
+            "date_admission_eff__date_exit_eff"
+          )
+      ]
+
+      observeEvent(trend_choices, {
+        updateSelectInput(
+          session,
+          "trend_delays",
+          choices = trend_choices,
+          selected = trend_choices
         )
       })
 
@@ -262,8 +314,131 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
           group_var = group_var()
         )
       })
+
+      # Plot trend of mean delays by onset date
+      output$delay_trend <- highcharter::renderHighchart({
+        req(input$trend_delays)
+
+        # rows are unchanged by get_delay_df, so onset date binds safely
+        trend_df <- dplyr::bind_cols(
+          get_delay_df(df(), date_vars),
+          date_symptom_onset = as.Date(df()$date_symptom_onset)
+        )
+
+        plot_delay_trend(
+          trend_df,
+          delays = input$trend_delays,
+          delay_choices = delay_choices,
+          agg = input$trend_agg,
+          co_value = input$co_value
+        )
+      })
     }
   )
+}
+
+#' Plot mean delays over time
+#'
+#' One line per delay: mean delay (days) by week or month of symptom onset.
+#' Delays outside 0 to `co_value` are excluded and counted in the credits.
+#'
+#' @param trend_df Data frame of delay pair columns plus `date_symptom_onset`.
+#' @param delays Delay column names to plot.
+#' @param delay_choices Named vector mapping delay columns to display labels.
+#' @param agg Either "week" (ISO, Monday start) or "month".
+#' @param co_value Maximum valid delay in days.
+#'
+#' @return A highchart object.
+#' @export
+plot_delay_trend <- function(
+  trend_df,
+  delays,
+  delay_choices,
+  agg = c("week", "month"),
+  co_value = 30
+) {
+  agg <- match.arg(agg)
+
+  long <- trend_df |>
+    dplyr::select(date_symptom_onset, dplyr::all_of(delays)) |>
+    tidyr::pivot_longer(
+      dplyr::all_of(delays),
+      names_to = "delay",
+      values_to = "timespan"
+    )
+
+  valid <- long |>
+    dplyr::filter(
+      !is.na(date_symptom_onset),
+      !is.na(timespan),
+      dplyr::between(timespan, 0, co_value)
+    )
+  n_removed <- sum(!is.na(long$timespan)) - nrow(valid)
+
+  summ <- valid |>
+    dplyr::mutate(
+      bin = lubridate::floor_date(
+        date_symptom_onset,
+        unit = agg,
+        week_start = 1
+      )
+    ) |>
+    dplyr::summarise(
+      mean = mean(timespan),
+      n = dplyr::n(),
+      .by = c(delay, bin)
+    ) |>
+    dplyr::arrange(delay, bin)
+
+  # Set1 caps at 9 colours but five events give 10 delay pairs
+  pal <- grDevices::hcl.colors(length(delays), "Dark 3")
+  hc <- highcharter::highchart() |>
+    highcharter::hc_chart(type = "line", zoomType = "x") |>
+    highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
+    highcharter::hc_yAxis(
+      title = list(text = "Mean delay (days)"),
+      min = 0
+    ) |>
+    highcharter::hc_legend(enabled = TRUE) |>
+    highcharter::hc_exporting(enabled = FALSE) |>
+    highcharter::hc_tooltip(
+      shared = FALSE,
+      useHTML = TRUE,
+      formatter = highcharter::JS(
+        "function() {
+          return '<b>' + this.series.name + '</b><br/>' +
+            Highcharts.dateFormat('%e %b %Y', this.x) + '<br/>' +
+            'Mean: ' + Highcharts.numberFormat(this.y, 1) + ' days<br/>' +
+            'n = ' + this.point.n;
+        }"
+      )
+    ) |>
+    highcharter::hc_credits(
+      enabled = TRUE,
+      text = paste0(n_removed, " delays removed (negative or over cut-off)")
+    )
+
+  for (i in seq_along(delays)) {
+    d <- summ |>
+      dplyr::filter(delay == delays[[i]]) |>
+      dplyr::mutate(x = highcharter::datetime_to_timestamp(bin))
+    # a delay with no valid rows has nothing to draw
+    if (nrow(d) == 0) {
+      next
+    }
+    label <- names(delay_choices)[match(delays[[i]], delay_choices)]
+    hc <- hc |>
+      highcharter::hc_add_series(
+        data = d,
+        type = "line",
+        highcharter::hcaes(x = x, y = mean),
+        name = label,
+        color = pal[[i]],
+        marker = list(enabled = TRUE, radius = 3)
+      )
+  }
+
+  hc
 }
 
 #' Get Delay DataFrame

@@ -1,10 +1,12 @@
 #* BUTEMBO PROJECT org ------------------------------------
-library(sf)
-library(here)
-library(tmap)
-library(janitor)
-library(patchwork)
-library(tidyverse)
+suppressPackageStartupMessages({
+  library(sf)
+  library(here)
+  library(tmap)
+  library(janitor)
+  library(patchwork)
+  library(tidyverse)
+})
 
 source(here::here("R", "theme.R"))
 source(here::here("R", "utils.R"))
@@ -84,7 +86,7 @@ etc_ll_path_kit <- fs::dir_ls(
   fs::path(
     etc_ll_path,
     "cte_kitatumba",
-    "exports"
+    "export_nominatif"
   )
 ) |>
   max()
@@ -94,7 +96,7 @@ etc_ll_path_ucg <- fs::dir_ls(
   fs::path(
     etc_ll_path,
     "ct_ucg",
-    "exports"
+    "export_nominatif"
   )
 ) |>
   max()
@@ -169,6 +171,10 @@ butembo_matched_ll_dir <- fs::path(
   "Butembo-surv",
   "data"
 )
+
+check_match_dir <- fs::path(butembo_matched_ll_dir, "check-match")
+vax_ll_out_dir <- fs::path(butembo_matched_ll_dir, "vaccinated_linelist")
+to_match_dir <- fs::path(butembo_matched_ll_dir, "to-be-matched")
 
 local_dir <- here::here("local")
 local_geobase_dir <- fs::path(local_dir, "geobase")

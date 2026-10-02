@@ -8,7 +8,7 @@
 #* CONFIG ------------------------------------
 
 EXPORT_TO_SHAREPOINT <- TRUE
-SEND_TO_SERVER <- FALSE
+SEND_TO_SERVER <- TRUE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 
@@ -471,18 +471,23 @@ lab_mobile_clean <- lab_mobile |>
     origin = provenance,
     sample_type = recode_values(
       type_d_echantillon,
-      "Ecouvillon Bucal(Oral,Salive)" ~ "Ecouvillon oral",
-      c("sang total", "Sang total") ~ "Sang total",
+      "Ecouvillon Oral" ~ "Ecouvillon oral",
+      c("sang total", "Sang total", "Sérum", "Sang") ~ "Sang total",
       c("Lait Matérnel") ~ "Lait Maternel",
       NA ~ NA_character_
     ),
     date_sampling = harmonize_dates(date_de_prelevement_mm_dd_yyy),
     date_lab_result = harmonize_dates(date_danalyse),
     lab_result = case_when(
-      str_detect(
-        kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg,
-        "Negatif"
-      ) ~ "Négatif",
+      kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
+        c(
+          "Negatif",
+          "Negatit",
+          "Négatif",
+          "negatif",
+          "Negatif MVE mais positif Rickettsia Salmonella",
+          "Negatif MVE mais positif goutte epaisse"
+        ) ~ "Négatif",
       kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
         c("Positf", "Positif") ~ "Positif",
       .default = NA_character_

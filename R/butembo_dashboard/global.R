@@ -109,7 +109,8 @@ group_vars <- c(
   "Health zone" = "adm2_comptabilisation",
   "Health structure" = "isolation_site_id",
   "Sex" = "sex",
-  "Outcome" = "type_of_exit"
+  "Outcome" = "type_of_exit",
+  "Local Infection" = "infection_butembo"
 )
 
 lab_date_vars <- c("Date of lab result" = "date_lab_result")
