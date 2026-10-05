@@ -141,7 +141,11 @@ date_vars <- c(
 group_vars <- c(
   "Health zone" = "adm2_comptabilisation",
   "Health structure" = "isolation_site_name",
+  "Age group" = "age_group",
   "Sex" = "sex",
+  "Dead outside isolation" = "dead_out_isolation",
+  "Transmission type" = "transmission_type_1",
+  "Dead on notification" = "dead_upon_notif_grp",
   "Outcome" = "type_of_exit",
   "Local Infection" = "infection_butembo"
 )
@@ -221,6 +225,36 @@ group_pals <- list(
     "Manguredjipa" = "#d98cb3"
   ),
   sex = c("Male" = "#2a6f97", "Female" = "#e9a03b"),
+  age_group = c(
+    "<1" = "#d9f0a3",
+    "1-4" = "#addd8e",
+    "5-9" = "#78c679",
+    "10-19" = "#41ab5d",
+    "20-29" = "#238443",
+    "30-39" = "#006837",
+    "40-49" = "#004529",
+    "50-59" = "#00331f",
+    "60+" = "#002115"
+  ),
+  dead_out_isolation = c(
+    "Yes" = "#9e2a2b",
+    "No" = "#2a6f97",
+    "Not applicable" = "#d9d9d9"
+  ),
+  dead_upon_notif_grp = c(
+    "Dead on notification" = "#9e2a2b",
+    "Alive on notification" = "#3a9d8f"
+  ),
+  transmission_type_1 = c(
+    "Familiale" = "#9e2a2b",
+    "Funérailles" = "#4d4d8f",
+    "Nosocomiale" = "#e09f3e",
+    "Sanguin directe" = "#d98cb3",
+    "Soins au malade" = "#3a9d8f",
+    "Visite occasionnelle" = "#6baed6",
+    "Autre" = "#8e5ea2",
+    "Unknown" = "#bdbdbd"
+  ),
   type_of_exit = c(
     "Recovered" = "#3a9d8f",
     "Abandoned" = "#bdbdbd",

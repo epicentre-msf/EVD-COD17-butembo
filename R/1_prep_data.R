@@ -8,6 +8,8 @@
 
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- TRUE
+# FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
+PREP_LAB_DATA <- FALSE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 
@@ -17,6 +19,7 @@ source(here::here("R", "fn_quality.R"))
 
 #* Path ------------------------------------
 time_write <- time_stamp()
+app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 
 #* Local geo cache --------------------------
 
@@ -227,7 +230,22 @@ ll_narr_clean <- ll_narr |>
       community_death == "No" ~ "Community",
       .default = NA_character_
     ),
-    death_place = factor(death_place, levels = c("CTE/CT", "Community"))
+    death_place = factor(death_place, levels = c("CTE/CT", "Community")),
+
+    # ! Dead outside isolation ?
+    # a place other than CTE/CT counts only when the patient arrived dead
+    dead_out_isolation = case_when(
+      # NA is kept for deaths with no data
+      outcome != "Died" ~ "Not applicable",
+      community_death %in% c("CTE/CT", "CTE", "CT") ~ "No",
+      dead_upon_arrival %in% "Yes" ~ "Yes",
+      community_death %in% c("ESS", "Communité") ~ "Yes",
+      .default = NA_character_
+    ),
+    dead_out_isolation = factor(
+      dead_out_isolation,
+      levels = c("Yes", "No", "Not applicable")
+    )
   ) |>
 
   # Admin level code
@@ -583,88 +601,101 @@ hf_flows |>
 
 #* LAB DATA --------------------------------
 # Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
+if (PREP_LAB_DATA) {
+  # load
+  lab_inrb <- rio::import(latest_inrb_lab_path, skip = 7) |>
+    as_tibble() |>
+    clean_names() |>
+    remove_empty()
 
-# load
-lab_inrb <- rio::import(latest_inrb_lab_path, skip = 7) |>
-  as_tibble() |>
-  clean_names() |>
-  remove_empty()
+  lab_inrb_clean <- lab_inrb |>
+    transmute(
+      new_sample = nouveau_prelevement_ou_reprelevement ==
+        "Nouveau Prélèvement",
+      date_notification = ymd(date_de_notification_dd_mm_yyy),
+      patient_status = statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
+      province,
+      zone_de_sante,
+      aire_de_sante,
+      origin = provenance,
+      sample_type = recode_values(
+        type_d_echantillon,
+        "Ecouvillon Bucal(Oral,Salive)" ~ "Ecouvillon oral",
+        c("sang total", "Sang total") ~ "Sang total",
+        c("Lait Matérnel") ~ "Lait Maternel",
+        NA ~ NA_character_
+      ),
+      date_sampling = ymd(date_de_prelevement_dd_mm_yyy),
+      date_lab_result = ymd(date_d_analyse_dd_mm_yyy),
+      lab_result = recode_values(
+        resultat_final,
+        "NEGATIF" ~ "Négatif",
+        "POSITIF" ~ "Positif",
+        NA ~ NA_character_
+      ),
+      source = "INRB Béni"
+    )
 
+  lab_mobile <- rio::import(latest_mobile_lab) |>
+    as_tibble() |>
+    clean_names() |>
+    remove_empty()
 
-lab_inrb_clean <- lab_inrb |>
-  transmute(
-    new_sample = nouveau_prelevement_ou_reprelevement == "Nouveau Prélèvement",
-    date_notification = ymd(date_de_notification_dd_mm_yyy),
-    patient_status = statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
-    province,
-    zone_de_sante,
-    aire_de_sante,
-    origin = provenance,
-    sample_type = recode_values(
-      type_d_echantillon,
-      "Ecouvillon Bucal(Oral,Salive)" ~ "Ecouvillon oral",
-      c("sang total", "Sang total") ~ "Sang total",
-      c("Lait Matérnel") ~ "Lait Maternel",
-      NA ~ NA_character_
-    ),
-    date_sampling = ymd(date_de_prelevement_dd_mm_yyy),
-    date_lab_result = ymd(date_d_analyse_dd_mm_yyy),
-    lab_result = recode_values(
-      resultat_final,
-      "NEGATIF" ~ "Négatif",
-      "POSITIF" ~ "Positif",
-      NA ~ NA_character_
-    ),
-    source = "INRB Béni"
+  lab_mobile_clean <- lab_mobile |>
+    transmute(
+      new_sample = nouveau_prelevement_ou_reprelevement ==
+        "Nouveau Prélèvement",
+      patient_status = recode_values(
+        statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
+        c("Décédé") ~ "Décédé",
+        "Vivant" ~ "Vivant",
+        NA ~ NA_character_
+      ),
+      date_notification = harmonize_dates(date_de_notification_dd_mm_yyy),
+      province,
+      zone_de_sante,
+      aire_de_sante,
+      origin = provenance,
+      sample_type = recode_values(
+        type_d_echantillon,
+        "Ecouvillon Oral" ~ "Ecouvillon oral",
+        c("sang total", "Sang total", "Sérum", "Sang") ~ "Sang total",
+        c("Lait Matérnel") ~ "Lait Maternel",
+        NA ~ NA_character_
+      ),
+      date_sampling = harmonize_dates(date_de_prelevement_mm_dd_yyy),
+      date_lab_result = harmonize_dates(date_danalyse),
+      lab_result = case_when(
+        kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
+          c(
+            "Negatif",
+            "Negatit",
+            "Négatif",
+            "negatif",
+            "Negatif MVE mais positif Rickettsia Salmonella",
+            "Negatif MVE mais positif goutte epaisse"
+          ) ~ "Négatif",
+        kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
+          c("Positf", "Positif") ~ "Positif",
+        .default = NA_character_
+      ),
+      source = "Laboratoire Mobile"
+    )
+
+  lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean) |>
+    mutate(lab_result = factor(lab_result, levels = c("Négatif", "Positif")))
+} else {
+  # reuse the previous export, so the Lab tab keeps its data
+  stopifnot(
+    "no previous app_data.rds to reuse lab_data from" = fs::file_exists(
+      app_data_path
+    )
   )
-
-lab_mobile <- rio::import(latest_mobile_lab) |>
-  as_tibble() |>
-  clean_names() |>
-  remove_empty()
-
-lab_mobile_clean <- lab_mobile |>
-  transmute(
-    new_sample = nouveau_prelevement_ou_reprelevement == "Nouveau Prélèvement",
-    patient_status = recode_values(
-      statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
-      c("Décédé") ~ "Décédé",
-      "Vivant" ~ "Vivant",
-      NA ~ NA_character_
-    ),
-    date_notification = harmonize_dates(date_de_notification_dd_mm_yyy),
-    province,
-    zone_de_sante,
-    aire_de_sante,
-    origin = provenance,
-    sample_type = recode_values(
-      type_d_echantillon,
-      "Ecouvillon Oral" ~ "Ecouvillon oral",
-      c("sang total", "Sang total", "Sérum", "Sang") ~ "Sang total",
-      c("Lait Matérnel") ~ "Lait Maternel",
-      NA ~ NA_character_
-    ),
-    date_sampling = harmonize_dates(date_de_prelevement_mm_dd_yyy),
-    date_lab_result = harmonize_dates(date_danalyse),
-    lab_result = case_when(
-      kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
-        c(
-          "Negatif",
-          "Negatit",
-          "Négatif",
-          "negatif",
-          "Negatif MVE mais positif Rickettsia Salmonella",
-          "Negatif MVE mais positif goutte epaisse"
-        ) ~ "Négatif",
-      kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg %in%
-        c("Positf", "Positif") ~ "Positif",
-      .default = NA_character_
-    ),
-    source = "Laboratoire Mobile"
+  lab_data <- readRDS(app_data_path)$lab_data
+  cli::cli_alert_info(
+    "lab data skipped: {nrow(lab_data)} rows reused from {fs::path_file(app_data_path)}"
   )
-
-lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean) |>
-  mutate(lab_result = factor(lab_result, levels = c("Négatif", "Positif")))
+}
 
 #* Prepare dashboard data -------------------------------------------
 
@@ -785,7 +816,33 @@ delay_dates <- c(
 #* Save to server ------------------------------------------------------
 # app_data.rds feeds the evd-2026-app dashboard on episerv
 app_data <- list(
-  linelist = add_delay_pairs(ll_narr_clean, delay_dates),
+  linelist = add_delay_pairs(ll_narr_clean, delay_dates) |>
+    # after build_quality(), so the quality tab still counts these as missing
+    mutate(
+      # labelled copy for grouping; mod_vb needs dead_upon_notif to stay logical
+      dead_upon_notif_grp = factor(
+        dead_upon_notif,
+        levels = c(TRUE, FALSE),
+        labels = c("Dead on notification", "Alive on notification")
+      ),
+      transmission_type_1 = factor(
+        case_match(
+          transmission_type_1,
+          c(NA, "Inconnu") ~ "Unknown",
+          .default = transmission_type_1
+        ),
+        levels = c(
+          "Familiale",
+          "Funérailles",
+          "Nosocomiale",
+          "Sanguin directe",
+          "Soins au malade",
+          "Visite occasionnelle",
+          "Autre",
+          "Unknown"
+        )
+      )
+    ),
   quality = quality,
   hf_visits = hf_visits,
   hf_cases = hf_cases,
@@ -793,8 +850,6 @@ app_data <- list(
   lab_data = lab_data,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
-
-app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 
 saveRDS(app_data, app_data_path)
 

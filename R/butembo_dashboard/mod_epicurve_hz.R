@@ -7,7 +7,7 @@ EPICURVE_HZ_DATES <- c(
   "Date of notification" = "date_notification"
 )
 
-mod_epicurve_hz_ui <- function(id) {
+mod_epicurve_hz_ui <- function(id, group_vars) {
   ns <- shiny::NS(id)
 
   bslib::card(
@@ -67,6 +67,13 @@ mod_epicurve_hz_ui <- function(id) {
             size = "sm"
           ),
           shiny::selectInput(
+            ns("group_var"),
+            "Group",
+            choices = c("None" = "none", group_vars),
+            selected = "none",
+            selectize = FALSE
+          ),
+          shiny::selectInput(
             ns("order_by"),
             "Rank places by",
             choices = c(
@@ -97,7 +104,7 @@ mod_epicurve_hz_ui <- function(id) {
   )
 }
 
-mod_epicurve_hz_server <- function(id, df) {
+mod_epicurve_hz_server <- function(id, df, group_vars) {
   shiny::moduleServer(id, function(input, output, session) {
     n_cols <- 3L
 
@@ -148,9 +155,27 @@ mod_epicurve_hz_server <- function(id, df) {
       )
     })
 
+    group_var <- shiny::reactive({
+      if (identical(input$group_var, "none")) NULL else input$group_var
+    })
+
     daily <- shiny::reactive({
-      df_dated() |>
-        dplyr::count(hz, date = .data[[date_col()]], name = "n")
+      d <- df_dated()
+      na_lab <- getOption("epishiny.na.label")
+      d$grp <- if (is.null(group_var())) {
+        "All"
+      } else {
+        dplyr::coalesce(as.character(d[[group_var()]]), na_lab)
+      }
+      dplyr::count(d, hz, grp, date = .data[[date_col()]], name = "n")
+    })
+
+    # factor order of the source column, so levels keep their natural order
+    grp_levels <- shiny::reactive({
+      present <- unique(daily()$grp)
+      src <- df_dated()[[group_var()]]
+      base <- if (is.factor(src)) levels(src) else sort(unique(as.character(src)))
+      c(intersect(base, present), setdiff(present, base))
     })
 
     selected_zones <- shiny::reactive({
@@ -188,25 +213,40 @@ mod_epicurve_hz_server <- function(id, df) {
           )
         }
 
-        # Latest week is partial while reporting catches up, so shade it faint
-        last_week <- lubridate::floor_date(max(daily()$date), "week", week_start = 1)
-        last_week_partial <- max(daily()$date) < last_week + 6
+        # Current calendar week is still filling, so shade it faint
+        this_week <- lubridate::floor_date(Sys.Date(), "week", week_start = 1)
 
         d <- d |>
-          dplyr::summarise(.by = c(hz, date), n = sum(n)) |>
+          dplyr::summarise(.by = c(hz, grp, date), n = sum(n)) |>
           dplyr::mutate(
             hz = factor(hz, levels = zones),
-            partial = by_week & last_week_partial & date == last_week
+            partial = date >= this_week
           )
 
-        ggplot2::ggplot(d, ggplot2::aes(x = date, y = n, fill = partial)) +
+        if (is.null(group_var())) {
+          fill_scale <- ggplot2::scale_fill_manual(
+            values = c("All" = "#9e2a2b"),
+            guide = "none"
+          )
+        } else {
+          lv <- grp_levels()
+          d$grp <- factor(d$grp, levels = lv)
+          fill_scale <- ggplot2::scale_fill_manual(
+            values = stats::setNames(group_colours(group_var(), lv), lv),
+            name = names(group_vars)[group_vars == group_var()],
+            drop = FALSE
+          )
+        }
+
+        ggplot2::ggplot(d, ggplot2::aes(x = date, y = n, fill = grp, alpha = partial)) +
           ggplot2::geom_col(
             col = "grey70",
             linewidth = 0.2,
             width = if (by_week) 7 else 1
           ) +
-          ggplot2::scale_fill_manual(
-            values = c(`FALSE` = "#9e2a2b", `TRUE` = "#e2b9b9"),
+          fill_scale +
+          ggplot2::scale_alpha_manual(
+            values = c(`FALSE` = 1, `TRUE` = 0.35),
             guide = "none"
           ) +
           ggplot2::facet_wrap(~hz, ncol = n_cols, scales = input$scales) +
@@ -220,7 +260,8 @@ mod_epicurve_hz_server <- function(id, df) {
           ggplot2::theme(
             strip.text = ggplot2::element_text(face = "bold"),
             panel.grid.minor = ggplot2::element_blank(),
-            panel.spacing.x = ggplot2::unit(1, "lines")
+            panel.spacing.x = ggplot2::unit(1, "lines"),
+            legend.position = "bottom"
           )
       },
       height = function() {

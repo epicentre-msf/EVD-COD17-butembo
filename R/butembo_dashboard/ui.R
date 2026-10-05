@@ -93,7 +93,7 @@ ui <- page_navbar(
     nav_panel(
       title = "Stratified Epicurves",
       value = "epicurve_hz",
-      mod_epicurve_hz_ui("epicurve_hz")
+      mod_epicurve_hz_ui("epicurve_hz", group_vars = group_vars)
     ),
     nav_panel(
       title = "Health facilities",

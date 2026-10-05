@@ -83,7 +83,8 @@ etc_ll_path_kit <- fs::dir_ls(
     etc_ll_path,
     "cte_kitatumba",
     "export_nominatif"
-  )
+  ),
+  regexp = "/[^/~][^/]*\\.xlsb$"
 ) |>
   max()
 
@@ -93,7 +94,8 @@ etc_ll_path_ucg <- fs::dir_ls(
     etc_ll_path,
     "ct_ucg",
     "export_nominatif"
-  )
+  ),
+  regexp = "/[^/~][^/]*\\.xlsb$"
 ) |>
   max()
 
@@ -110,9 +112,14 @@ lab_dir <- fs::path(butembo_project_data_path, "brute", "labo")
 latest_inrb_lab_path <- fs::dir_ls(
   fs::path(lab_dir),
   regex = 'Butembo_MVE17_Partage_Resultats'
-)
+) |>
+  max()
 
-latest_mobile_lab <- fs::dir_ls(lab_dir, regex = "MVE_17_LABO_MOBILE_BUTEMBO")
+latest_mobile_lab <- fs::dir_ls(
+  lab_dir,
+  regex = "MVE_17_LABO_MOBILE_BUTEMBO"
+) |>
+  max()
 
 #* ENSEMBLE LINELIST ----------------
 narr_ll_dir <- fs::path(
@@ -144,6 +151,10 @@ butembo_matched_ll_dir <- fs::path(
 )
 
 check_match_dir <- fs::path(butembo_matched_ll_dir, "check-match")
+patrick_match_path <- fs::path(
+  check_match_dir,
+  "vaccinated_check_PB_2026-10-02.xlsx"
+)
 vax_ll_out_dir <- fs::path(butembo_matched_ll_dir, "vaccinated_linelist")
 to_match_dir <- fs::path(butembo_matched_ll_dir, "to-be-matched")
 

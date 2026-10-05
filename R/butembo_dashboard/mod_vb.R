@@ -29,7 +29,7 @@ mod_vb_ui <- function(id) {
         paste0(
           "CFR is deaths over cases with a known outcome ",
           "(Died or Recovered) - abandoned and unresolved exits excluded.<br><br>",
-          "Non-isolated is any death occuring outside a CTE or CT"
+          "Non-isolated is a death outside a CTE or CT where the patient arrived dead"
         )
       ),
       value = textOutput(ns("deaths"), inline = TRUE),
@@ -85,9 +85,9 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       n_died <- sum(conf$type_of_exit == "Died", na.rm = TRUE)
       n_recovered <- sum(conf$type_of_exit == "Recovered", na.rm = TRUE)
 
-      # unclassified place of death counts as non-isolated, so the split sums to n_died
+      # deaths with no place or arrival status are left out, so this can undercount
       n_nonisolated_deaths <- sum(
-        conf$type_of_exit == "Died" & !conf$death_place %in% "CTE/CT",
+        conf$type_of_exit == "Died" & conf$dead_out_isolation %in% "Yes",
         na.rm = TRUE
       )
 

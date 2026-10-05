@@ -30,7 +30,10 @@ kit_sub <- kit_ll |>
     adm2_name__res,
     adm3_name__res,
     vaccination_rvsv_yn,
-    type_of_exit
+    type_of_exit,
+    date_admission_eff = as.Date(date_admission_eff),
+    date_symptom_onset = as.Date(date_symptom_onset),
+    date_exit = as.Date(date_exit_eff)
   )
 
 #* UCG ETC linelist - remove cases transferred to Kitatumba ETC
@@ -53,7 +56,10 @@ ucg_sub <- ucg_ll |>
     adm2_name__res,
     adm3_name__res,
     vaccination_rvsv_yn,
-    type_of_exit
+    type_of_exit,
+    date_admission_eff = as.Date(date_admission_eff),
+    date_symptom_onset = as.Date(date_symptom_onset),
+    date_exit = as.Date(date_exit_eff)
   )
 
 # Bind together vaccinated from ETCs
@@ -104,6 +110,9 @@ extra_vax <- ll_clean |>
     adm2_name__res,
     adm3_name__res,
     type_of_exit,
+    date_admission_eff = as.Date(date_admission_eff),
+    date_symptom_onset = as.Date(date_symptom_onset),
+    date_exit = as.Date(date_exit_eff),
     vaccination_rvsv_yn,
     year_vaccination_rvsv
   )
@@ -112,6 +121,9 @@ extra_vax <- ll_clean |>
 vax_ll <- bind_rows(vax_etc, extra_vax)
 cli::cli_inform(
   "vax_ll: {nrow(vax_etc)} ETC + {nrow(extra_vax)} pre-ETC = {nrow(vax_ll)}"
+)
+cli::cli_inform(
+  "{sum(is.na(vax_ll$date_admission_eff))} of {nrow(vax_ll)} vax_ll row{?s} with no admission date"
 )
 
 #* Add surveillance fields ---------------
@@ -349,6 +361,51 @@ vax_ll <- vax_ll |>
 cli::cli_inform(
   "vax_ll: {n_before} row{?s} before match status join, {nrow(vax_ll)} after"
 )
+
+#* Patrick's independent match, kept apart from the check-match history ----
+patrick_match <- rio::import(patrick_match_path) |>
+  as_tibble() |>
+  mutate(across(everything(), as.character)) |>
+  select(match_key, match_flw_db, match_flw_detail)
+
+stopifnot(
+  "patrick_match has duplicate match_key" = !anyDuplicated(
+    patrick_match$match_key
+  )
+)
+
+n_before <- nrow(vax_ll)
+vax_ll <- vax_ll |>
+  left_join(
+    patrick_match,
+    by = join_by(match_key),
+    relationship = "one-to-one"
+  )
+cli::cli_inform(c(
+  "vax_ll: {n_before} row{?s} before patrick_match join, {nrow(vax_ll)} after",
+  "{sum(patrick_match$match_key %in% vax_ll$match_key)} of {nrow(patrick_match)} patrick_match row{?s} found in vax_ll"
+))
+
+#* final classification Match ---------------------------
+vax_ll |> count(match_flw_db, match_ervebo_db)
+
+vax_ll <- vax_ll |>
+  mutate(
+    match_clean = case_when(
+      if_any(
+        c(match_ervebo_db, match_flw_db),
+        ~ str_detect(.x, 'Confident')
+      ) ~ "Confident",
+      if_all(
+        c(match_ervebo_db, match_flw_db),
+        ~ str_detect(.x, "No match")
+      ) ~ "No match",
+      is.na(match_flw_db) &
+        str_detect(match_ervebo_db, "Possible|Probable") ~ "Possible",
+      is.na(match_flw_db) & str_detect(match_ervebo_db, "Match") ~ "Confident",
+      .default = "No match"
+    )
+  )
 
 #* Export ------------------------------------
 vax_ll <- vax_ll |> select(-match_key)

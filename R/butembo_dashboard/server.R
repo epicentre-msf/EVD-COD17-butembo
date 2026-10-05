@@ -93,7 +93,11 @@ server <- function(input, output, session) {
     group_vars = group_vars
   )
 
-  mod_epicurve_hz_server("epicurve_hz", df = df_period)
+  mod_epicurve_hz_server(
+    "epicurve_hz",
+    df = df_period,
+    group_vars = group_vars
+  )
 
   mod_facilities_server(
     "facilities",
