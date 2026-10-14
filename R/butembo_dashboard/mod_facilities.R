@@ -11,7 +11,7 @@ HF_MAP_RAMP <- c("#d7301f", "#7f0000")
 # integer-binned histogram; zero bins kept so gaps in the distribution show
 hc_count_bars <- function(x, title, x_lab) {
   x <- x[!is.na(x) & x >= 0]
-  shiny::validate(shiny::need(length(x) > 0, "No values to display."))
+  shiny::validate(shiny::need(length(x) > 0, "Aucune valeur à afficher."))
   lvls <- seq(0, max(x))
   counts <- tabulate(as.integer(x) + 1L, nbins = length(lvls))
 
@@ -24,7 +24,7 @@ hc_count_bars <- function(x, title, x_lab) {
     ) |>
     highcharter::hc_xAxis(categories = lvls, title = list(text = x_lab)) |>
     highcharter::hc_yAxis(
-      title = list(text = "Count"),
+      title = list(text = "Effectif"),
       allowDecimals = FALSE
     ) |>
     highcharter::hc_plotOptions(
@@ -36,7 +36,7 @@ hc_count_bars <- function(x, title, x_lab) {
         pct = sprintf("%.1f%%", 100 * counts / sum(counts))
       )),
       color = "#3a7ca5",
-      name = "Count",
+      name = "Effectif",
       tooltip = list(
         pointFormat = "<b>{point.y}</b> ({point.pct})"
       )
@@ -58,22 +58,22 @@ mod_facilities_ui <- function(id) {
     bslib::navset_card_tab(
       full_screen = TRUE,
       id = ns("hf_tab"),
-      title = "Structures that saw cases",
+      title = "Structures ayant vu des cas",
       bslib::nav_panel(
-        "Map",
+        "Carte",
         shiny::uiOutput(ns("map_disclaimer")),
         mapgl::maplibreOutput(ns("map"), height = "100%")
       ),
       bslib::nav_panel(
-        "Table",
+        "Tableau",
         shiny::uiOutput(ns("table_disclaimer")),
         reactable::reactableOutput(ns("top_tbl"))
       ),
       bslib::nav_panel(
-        "Flows",
+        "Flux",
         htmltools::div(
           class = "card-disclaimer",
-          "Consecutive visits, all cases; not affected by the filters."
+          "Visites consécutives, tous les cas ; non affectées par les filtres."
         ),
         mapgl::maplibreOutput(ns("flow_map"), height = "100%")
       )
@@ -85,7 +85,7 @@ mod_facilities_ui <- function(id) {
         full_screen = TRUE,
         bslib::card_header(
           class = "d-flex align-items-center flex-wrap gap-3",
-          "Visits per case",
+          "Visites par cas",
           shiny::uiOutput(ns("dist_footer"))
         ),
         bslib::card_body(
@@ -160,7 +160,7 @@ mod_facilities_server <- function(
     output$top_tbl <- reactable::renderReactable({
       # raw_name is only the map's join key
       d <- dplyr::select(top(), -raw_name)
-      shiny::validate(shiny::need(nrow(d) > 0, "No structure visited."))
+      shiny::validate(shiny::need(nrow(d) > 0, "Aucune structure visitée."))
 
       domain <- c(0, max(d$j21))
       # cell background from the colour ramp, scaled to the 21 d maximum
@@ -202,16 +202,16 @@ mod_facilities_server <- function(
             sticky = "left",
             minWidth = 170
           ),
-          hf_as = reactable::colDef(name = "Health area", align = "left"),
-          hf_zs = reactable::colDef(name = "Health zone", align = "left"),
+          hf_as = reactable::colDef(name = "Aire de santé", align = "left"),
+          hf_zs = reactable::colDef(name = "Zone de santé", align = "left"),
           total = reactable::colDef(
             name = "Total",
             style = list(fontWeight = 600),
             minWidth = 70
           ),
-          j7 = count_col("7 d"),
-          j14 = count_col("14 d"),
-          j21 = count_col("21 d")
+          j7 = count_col("7 j"),
+          j14 = count_col("14 j"),
+          j21 = count_col("21 j")
         )
       )
     })
@@ -221,13 +221,13 @@ mod_facilities_server <- function(
       htmltools::div(
         class = "card-disclaimer",
         paste0(
-          "Cases seen in the last 7 / 14 / 21 days to ",
+          "Cas vus au cours des 7 / 14 / 21 derniers jours jusqu'au ",
           format(anchor(), "%d %b %Y"),
           ". ",
           dplyr::n_distinct(visits_f()$unique_id),
-          " of ",
+          " cas filtrés sur ",
           dplyr::n_distinct(df()$unique_id),
-          " filtered cases have a recorded visit."
+          " ont une visite enregistrée."
         )
       )
     })
@@ -259,13 +259,13 @@ mod_facilities_server <- function(
             hf_as,
             " | ",
             hf_zs,
-            "<br>Total: ",
+            "<br>Total : ",
             total,
-            "<br>7 d: ",
+            "<br>7 j : ",
             j7,
-            " &middot; 14 d: ",
+            " &middot; 14 j : ",
             j14,
-            " &middot; 21 d: ",
+            " &middot; 21 j : ",
             j21
           )
         )
@@ -370,15 +370,15 @@ mod_facilities_server <- function(
         class = "card-disclaimer",
         paste0(
           n_no_hf,
-          " of ",
+          " cas sur ",
           n_cases,
-          " cases (",
+          " (",
           sprintf("%.1f", pct_no_hf),
-          "%) have no health facility information. ",
+          " %) sans information sur la formation sanitaire. ",
           n_unmapped,
-          " of ",
+          " structures sur ",
           nrow(top()),
-          " facilities not located."
+          " non localisées."
         )
       )
     })
@@ -386,23 +386,23 @@ mod_facilities_server <- function(
     #* Distributions -------------------------------------------------------
     output$dist_n <- highcharter::renderHighchart({
       v <- visits_f()
-      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+      shiny::validate(shiny::need(nrow(v) > 0, "Aucune visite enregistrée."))
 
       v |>
         dplyr::summarise(.by = unique_id, value = dplyr::n_distinct(hf_name)) |>
         dplyr::pull(value) |>
-        hc_count_bars("Structures visited (per case)", "Structures")
+        hc_count_bars("Structures visitées (par cas)", "Structures")
     })
 
     output$dist_los <- highcharter::renderHighchart({
       v <- visits_f()
-      shiny::validate(shiny::need(nrow(v) > 0, "No recorded visits."))
+      shiny::validate(shiny::need(nrow(v) > 0, "Aucune visite enregistrée."))
 
       # negative stays are entry errors, already NA in prep
       v |>
         dplyr::filter(!is.na(los)) |>
         dplyr::pull(los) |>
-        hc_count_bars("Length of stay per structure (days)", "Days")
+        hc_count_bars("Durée de séjour par structure (jours)", "Jours")
     })
 
     output$dist_footer <- shiny::renderUI({
@@ -412,11 +412,11 @@ mod_facilities_server <- function(
         class = "card-disclaimer",
         paste0(
           nrow(v),
-          " visits by ",
+          " visites de ",
           dplyr::n_distinct(v$unique_id),
-          " cases; ",
+          " cas ; ",
           n_los,
-          " without a valid length of stay."
+          " sans durée de séjour valide."
         )
       )
     })

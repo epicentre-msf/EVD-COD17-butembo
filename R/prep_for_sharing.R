@@ -60,3 +60,72 @@ export_clean(
   time_write,
   dir = butembo_share_data_path
 )
+
+#* NOMINATIVE CONFIRMED CASES --------------
+# One row per positive test. Goes to lab-data, never to the partage folder.
+confirmed <- ll_clean |>
+  filter(EVD_status == "Confirmed")
+
+cli::cli_inform(
+  "{nrow(confirmed)} confirmed of {nrow(ll_clean)} rows; {nrow(ll_clean) - nrow(confirmed)} dropped (not confirmed)"
+)
+
+positive_tests <- confirmed |>
+  select(
+    unique_id,
+    contains("lab_id_"),
+    contains("lab_result_"),
+    contains("date_lab_sample_")
+  ) |>
+  mutate(across(-unique_id, as.character)) |>
+  pivot_longer(
+    cols = -unique_id,
+    names_to = c(".value", "test"),
+    names_pattern = "(.*?)(\\d+)$",
+    names_transform = list(test = as.integer)
+  ) |>
+  rename_with(\(x) str_remove(x, "_$")) |>
+  filter(lab_result == "Positif") |>
+  mutate(date_lab_sample = as.Date(date_lab_sample)) |>
+  # duplicate linelist rows share a unique_id and repeat the same test
+  distinct(unique_id, lab_id, date_lab_sample)
+
+# unique_id is shared by linelist rows with the same pid and nom
+confirmed_cases <- confirmed |>
+  select(unique_id, pid, nom, age, age_unit, sex, date_notification) |>
+  slice_head(n = 1, by = unique_id)
+
+cli::cli_inform(
+  "{nrow(confirmed) - nrow(confirmed_cases)} duplicate row{?s} collapsed to {nrow(confirmed_cases)} confirmed case{?s} (first row per unique_id)"
+)
+
+ll_nominative <- confirmed_cases |>
+  left_join(
+    positive_tests,
+    by = join_by(unique_id),
+    relationship = "one-to-many"
+  )
+
+cli::cli_inform(c(
+  "{nrow(confirmed_cases)} confirmed case{?s} before lab join, {nrow(ll_nominative)} row{?s} after",
+  "{sum(!confirmed_cases$unique_id %in% positive_tests$unique_id)} confirmed case{?s} with no positive test",
+  "{sum(table(positive_tests$unique_id) > 1)} confirmed case{?s} with more than one positive test",
+  "{sum(is.na(positive_tests$lab_id))} of {nrow(positive_tests)} positive test{?s} with no lab_id"
+))
+
+export_clean(
+  ll_nominative,
+  CONFIG$export_prefix,
+  "confirmed-nominative",
+  time_write,
+  dir = lab_data_dir
+)
+
+# lab colleagues open this in Excel, not R
+rio::export(
+  ll_nominative,
+  fs::path(
+    lab_data_dir,
+    glue::glue("{CONFIG$export_prefix}_confirmed-nominative__{time_write}.xlsx")
+  )
+)

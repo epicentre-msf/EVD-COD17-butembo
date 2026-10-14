@@ -54,27 +54,27 @@ mod_quality_ui <- function(id, quality) {
   n_hf_unmatched <- nrow(quality$hf_unmatched)
 
   nav_panel(
-    title = tags$span(bsicons::bs_icon("clipboard2-check"), "Data quality"),
+    title = tags$span(bsicons::bs_icon("clipboard2-check"), "Qualité des données"),
     value = id,
     bslib::as_fill_carrier(htmltools::div(
       class = "reporting-container quality-container",
       navset_card_tab(
         id = ns("tabs"),
         nav_panel(
-          title = tags$span(bsicons::bs_icon("ui-checks-grid"), "Completeness"),
+          title = tags$span(bsicons::bs_icon("ui-checks-grid"), "Complétude"),
           value = "completeness",
           bslib::as_fill_carrier(htmltools::div(
             class = "mt-3",
             quality_explainer(
-              "Percentage of records with a value filled in for each ",
-              "variable, across the whole surveillance linelist. Collapsed ",
-              "section rows show the average completeness of the section."
+              "Pourcentage d'enregistrements renseignés pour chaque ",
+              "variable, sur l'ensemble de la liste linéaire de surveillance. ",
+              "Les sections repliées affichent la complétude moyenne de la section."
             ),
             htmltools::div(
               class = "epicurve-grey-toggle mb-2",
               shinyWidgets::radioGroupButtons(
                 ns("rows"),
-                "Rows",
+                "Lignes",
                 choices = c("Sections" = "section", "Variables" = "variable"),
                 selected = "variable",
                 size = "sm"
@@ -84,38 +84,38 @@ mod_quality_ui <- function(id, quality) {
           ))
         ),
         nav_panel(
-          title = tags$span(bsicons::bs_icon("geo-alt"), "Geographic precision"),
+          title = tags$span(bsicons::bs_icon("geo-alt"), "Précision géographique"),
           value = "geo",
           bslib::as_fill_carrier(htmltools::div(
             navset_underline(
               nav_panel(
-                title = "Match rate",
+                title = "Taux de correspondance",
                 value = "geo_summary",
                 bslib::as_fill_carrier(htmltools::div(
                   class = "mt-3",
                   quality_explainer(
                     tags$p(
                       class = "mb-0",
-                      "Each cell shows a percentage of patients whose place of ",
-                      "residence, onset or notification is known at the given ",
-                      "admin level."
+                      "Chaque cellule indique le pourcentage de patients dont le lieu de ",
+                      "résidence, de début des symptômes ou de notification est connu au ",
+                      "niveau administratif indiqué."
                     ),
                     tags$ul(
                       class = "mb-0",
                       tags$li(HTML(
-                        "<b>Recorded</b>: a location was entered in the linelist"
+                        "<b>Renseigné</b> : un lieu a été saisi dans la liste linéaire"
                       )),
                       tags$li(HTML(paste0(
-                        "<b>Matched % of recorded</b>: share of recorded ",
-                        "locations that matched a valid unit in the admin ",
-                        "boundary geobase, so can be mapped"
+                        "<b>Correspondance % des renseignés</b> : part des lieux ",
+                        "renseignés correspondant à une unité valide de la géobase ",
+                        "administrative, donc cartographiables"
                       ))),
                       tags$li(HTML(
-                        "<b>Matched % of all</b>: the same, out of every patient"
+                        "<b>Correspondance % du total</b> : idem, sur l'ensemble des patients"
                       )),
                       tags$li(HTML(paste0(
-                        "A health area only matches within a matched health ",
-                        "zone, so a zone failure also fails its health area"
+                        "Une aire de santé ne correspond que si sa zone de santé ",
+                        "correspond ; l'échec d'une zone entraîne celui de son aire"
                       )))
                     )
                   ),
@@ -124,7 +124,7 @@ mod_quality_ui <- function(id, quality) {
               ),
               nav_panel(
                 title = htmltools::tagList(
-                  "Unmatched locations",
+                  "Lieux non appariés",
                   htmltools::span(
                     class = "badge rounded-pill text-bg-secondary ms-1",
                     n_unmatched
@@ -136,19 +136,19 @@ mod_quality_ui <- function(id, quality) {
                   htmltools::div(
                     class = "d-flex align-items-start gap-5",
                     quality_explainer(
-                      "Recorded location names that never matched a valid unit ",
-                      "in the admin boundary geobase - a misspelling, or a unit ",
-                      "missing from the geobase."
+                      "Noms de lieux renseignés qui ne correspondent à aucune unité ",
+                      "valide de la géobase administrative : faute d'orthographe ",
+                      "ou unité absente de la géobase."
                     ),
                     htmltools::div(
                       class = "ms-auto pt-2 flex-shrink-0",
                       bslib::tooltip(
                         shiny::downloadButton(
                           ns("download_unmatched"),
-                          "Download .csv",
+                          "Télécharger .csv",
                           class = "btn-sm btn-link text-muted text-decoration-none p-0 border-0"
                         ),
-                        "Downloads the full unmatched-locations table"
+                        "Télécharge le tableau complet des lieux non appariés"
                       )
                     )
                   ),
@@ -156,7 +156,7 @@ mod_quality_ui <- function(id, quality) {
                 ))
               ),
               nav_panel(
-                title = "Facility matching",
+                title = "Appariement des formations sanitaires",
                 value = "hf_summary",
                 bslib::as_fill_carrier(htmltools::div(
                   class = "mt-3",
@@ -164,21 +164,21 @@ mod_quality_ui <- function(id, quality) {
                     tags$p(
                       class = "mb-0",
                       paste0(
-                        quality$hf_summary$n_matched, " of ",
+                        quality$hf_summary$n_matched, " sur ",
                         quality$hf_summary$n_total,
-                        " visited structures matched the facility file ",
-                        "with coordinates."
+                        " structures visitées correspondent au fichier des ",
+                        "formations sanitaires avec coordonnées."
                       )
                     ),
                     tags$ul(
                       class = "mb-0",
                       tags$li(HTML(paste0(
-                        "<b>Precision</b>: finest level at which a visited ",
-                        "structure can be placed: facility (coordinates), ",
-                        "else health area, else health zone"
+                        "<b>Précision</b> : niveau le plus fin auquel une structure ",
+                        "visitée peut être située : formation sanitaire (coordonnées), ",
+                        "sinon aire de santé, sinon zone de santé"
                       ))),
                       tags$li(HTML(
-                        "<b>% of visits</b>: share of recorded visits (named structures only)"
+                        "<b>% des visites</b> : part des visites enregistrées (structures nommées uniquement)"
                       ))
                     )
                   ),
@@ -187,7 +187,7 @@ mod_quality_ui <- function(id, quality) {
               ),
               nav_panel(
                 title = htmltools::tagList(
-                  "Unmatched facilities",
+                  "Formations sanitaires non appariées",
                   htmltools::span(
                     class = "badge rounded-pill text-bg-secondary ms-1",
                     n_hf_unmatched
@@ -200,22 +200,22 @@ mod_quality_ui <- function(id, quality) {
                     class = "d-flex align-items-start gap-5",
                     quality_explainer(
                       paste0(
-                        quality$hf_summary$n_matched, " of ",
+                        quality$hf_summary$n_matched, " sur ",
                         quality$hf_summary$n_total,
-                        " visited structures matched the facility file. "
+                        " structures visitées correspondent au fichier des formations sanitaires. "
                       ),
-                      "The rest cannot be mapped: either no health area was ",
-                      "recorded, or the name and health area are not in the file."
+                      "Les autres ne peuvent pas être cartographiées : soit aucune aire de ",
+                      "santé n'a été renseignée, soit le nom et l'aire de santé sont absents du fichier."
                     ),
                     htmltools::div(
                       class = "ms-auto pt-2 flex-shrink-0",
                       bslib::tooltip(
                         shiny::downloadButton(
                           ns("download_hf_unmatched"),
-                          "Download .csv",
+                          "Télécharger .csv",
                           class = "btn-sm btn-link text-muted text-decoration-none p-0 border-0"
                         ),
-                        "Downloads the full unmatched-facilities table"
+                        "Télécharge le tableau complet des formations sanitaires non appariées"
                       )
                     )
                   ),
@@ -296,7 +296,7 @@ mod_quality_server <- function(id, quality) {
           ),
           first_var = reactable::colDef(show = FALSE),
           pct_complete = reactable::colDef(
-            name = "% complete",
+            name = "% complet",
             width = 100,
             aggregate = "mean",
             cell = completeness_pct_cell_js(),
@@ -347,11 +347,11 @@ mod_quality_server <- function(id, quality) {
     output$hf_summary_table <- reactable::renderReactable({
       p <- quality$hf_summary$precision
       tbl <- data.frame(
-        Precision = as.character(p$precision),
+        Précision = as.character(p$precision),
         Structures = p$n_structures,
-        Visits = p$n_visits,
-        `% of visits` = 100 * p$n_visits / sum(p$n_visits),
-        Cases = p$n_cases,
+        Visites = p$n_visits,
+        `% des visites` = 100 * p$n_visits / sum(p$n_visits),
+        Cas = p$n_cases,
         check.names = FALSE
       )
       reactable::reactable(
@@ -362,8 +362,8 @@ mod_quality_server <- function(id, quality) {
         theme = rt_theme(),
         defaultColDef = reactable::colDef(align = "center", headerVAlign = "bottom"),
         columns = list(
-          Precision = reactable::colDef(align = "left"),
-          `% of visits` = reactable::colDef(format = reactable::colFormat(digits = 1, suffix = "%"))
+          Précision = reactable::colDef(align = "left"),
+          `% des visites` = reactable::colDef(format = reactable::colFormat(digits = 1, suffix = "%"))
         )
       )
     })
@@ -454,7 +454,7 @@ geo_pct_cell <- function(value) {
       "background: %s; font-weight: 600; border-radius: 3px; margin: -3px -2px; padding: 3px 6px;",
       grDevices::rgb(GEO_RAMP_FN(pos), maxColorValue = 255)
     ),
-    title = sprintf("Exact value: %.1f%%", value),
+    title = sprintf("Valeur exacte : %.1f%%", value),
     sprintf("%.0f%%", value)
   )
 }

@@ -8,7 +8,7 @@ mod_vb_ui <- function(id) {
     fill = FALSE,
     class = "pt-2 hgap-tight",
     value_box(
-      title = "Confirmed cases",
+      title = "Cas confirmés",
       value = textOutput(ns("confirmed"), inline = TRUE),
       p(uiOutput(ns("confirmed_info"), inline = TRUE)),
       showcase_layout = "left center",
@@ -16,7 +16,7 @@ mod_vb_ui <- function(id) {
       height = "85px"
     ),
     value_box(
-      title = "Alive at notification",
+      title = "Vivants à la notification",
       value = textOutput(ns("alive_notif"), inline = TRUE),
       p(uiOutput(ns("alive_notif_info"), inline = TRUE)),
       showcase_layout = "left center",
@@ -25,11 +25,9 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "Deaths",
+        "Décès",
         paste0(
-          "CFR is deaths over cases with a known outcome ",
-          "(Died or Recovered) - abandoned and unresolved exits excluded.<br><br>",
-          "Non-isolated is a death outside a CTE or CT where the patient arrived dead"
+          "<br>Non isolé : décès hors d'un CTE ou CT, patient arrivé décédé"
         )
       ),
       value = textOutput(ns("deaths"), inline = TRUE),
@@ -40,12 +38,12 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "Cases investigated",
+        "Cas investigués",
         paste0(
-          "Investigated is defined for any case with a narrative.<br>",
-          "Finalised: narrative is read and fully encoded in database.<br>",
-          "In process: narrative's key informations have been encoded in the database.<br>",
-          "Pending: narrative is available but not read."
+          "Est investigué tout cas disposant d'un récit.<br>",
+          "Finalisé : récit lu et entièrement encodé dans la base.<br>",
+          "En cours : informations clés du récit encodées dans la base.<br>",
+          "En attente : récit disponible mais non lu."
         )
       ),
       value = textOutput(ns("narr_final"), inline = TRUE),
@@ -129,7 +127,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "MSF confirmed patients",
+          label = "Patients confirmés MSF",
           value = paste0(
             scales::number(s$n_msf),
             " (",
@@ -154,7 +152,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "MSF confirmed patients",
+          label = "Patients confirmés MSF",
           value = paste0(
             scales::number(s$n_msf),
             " (",
@@ -170,12 +168,12 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$deaths_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
+        # list(
+        #   label = "CFR",
+        #   value = vb_pct(s$n_died, s$n_died + s$n_recovered)
+        # ),
         list(
-          label = "CFR",
-          value = vb_pct(s$n_died, s$n_died + s$n_recovered)
-        ),
-        list(
-          label = "Non-isolated",
+          label = "Non isolés",
           value = paste0(
             scales::number(s$n_nonisolated_deaths),
             " (",
@@ -200,7 +198,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Finalised",
+          label = "Finalisés",
           value = paste0(
             scales::number(s$n_finalised),
             " (",
@@ -209,7 +207,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
           )
         ),
         list(
-          label = "In process",
+          label = "En cours",
           value = paste0(
             scales::number(s$n_in_process),
             " (",
@@ -218,7 +216,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
           )
         ),
         list(
-          label = "Pending",
+          label = "En attente",
           value = paste0(
             scales::number(s$n_pending),
             " (",

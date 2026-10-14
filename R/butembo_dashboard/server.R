@@ -27,6 +27,25 @@ server <- function(input, output, session) {
     out
   })
 
+  # lab samples follow the same period, anchored on their own latest result
+  lab_period <- reactive({
+    per <- input$period %||% "total"
+    if (identical(per, "total")) {
+      return(lab_data)
+    }
+    n_days <- c(last_7d = 7, last_14d = 14, last_21d = 21)[[per]]
+    max_date <- max(lab_data$date_lab_result, na.rm = TRUE)
+    out <- dplyr::filter(
+      lab_data,
+      date_lab_result >= max_date - (n_days - 1)
+    )
+    message(
+      "lab period ", per, ": kept ", nrow(out), " of ", nrow(lab_data),
+      " samples (", sum(is.na(lab_data$date_lab_result)), " without result date)"
+    )
+    out
+  })
+
   map_click <- mod_map_place_server(
     id = "map",
     df = df_period,
@@ -45,7 +64,7 @@ server <- function(input, output, session) {
     group_pal = evd_pal,
     show_ratio = TRUE,
     ratio_var = "type_of_exit",
-    ratio_lab = "CFR",
+    ratio_lab = "Létalité",
     ratio_numer = "Died",
     ratio_denom = c("Died", "Recovered", "Abandoned"),
     place_filter = map_click,
@@ -79,6 +98,8 @@ server <- function(input, output, session) {
     df = df_period,
     age_var = "age",
     sex_var = "sex",
+    age_var_lab = "Âge (années)",
+    age_group_lab = "Groupe d'âge",
     male_level = "Male",
     female_level = "Female",
     time_filter = bar_click,
@@ -112,7 +133,7 @@ server <- function(input, output, session) {
 
   mod_quality_server("quality", quality = quality)
 
-  mod_lab_server("lab", shiny::reactive(lab_data))
+  mod_lab_server("lab", lab_period)
 
   # epishiny 0.1.0 has no default-date arg, so set it once on startup
   observe({

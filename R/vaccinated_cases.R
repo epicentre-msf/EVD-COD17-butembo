@@ -366,6 +366,7 @@ cli::cli_inform(
 patrick_match <- rio::import(patrick_match_path) |>
   as_tibble() |>
   mutate(across(everything(), as.character)) |>
+  add_key() |>
   select(match_key, match_flw_db, match_flw_detail)
 
 stopifnot(
@@ -408,9 +409,22 @@ vax_ll <- vax_ll |>
   )
 
 #* Export ------------------------------------
-vax_ll <- vax_ll |> select(-match_key)
-to_rematch <- to_rematch |>
+n_rematch <- nrow(to_rematch)
+# rebuilt here because match_clean only exists after the joins
+to_rematch <- vax_ll |>
+  filter(send_for_matching | values_changed) |>
+  mutate(
+    match_ervebo_db = NA_character_,
+    match_flw_db = NA_character_,
+    match_detail = NA_character_,
+    match_flw_detail = NA_character_
+  ) |>
   select(-c(match_key, EVD_status, type_of_exit, lab_result, date_lab_sample))
+# same categories match_clean uses, so re-imported files classify cleanly
+match_options <- c("Confident", "Possible", "No match")
+stopifnot("to_rematch changed size" = nrow(to_rematch) == n_rematch)
+
+vax_ll <- vax_ll |> select(-match_key)
 
 export_clean(
   vax_ll,
@@ -439,6 +453,10 @@ if (nrow(to_rematch) > 0) {
     file = fs::path(
       to_match_dir,
       glue::glue("{CONFIG$export_prefix}_to-be-matched__{time_write_hm}.xlsx")
+    ),
+    validate = list(
+      match_ervebo_db = match_options,
+      match_flw_db = match_options
     ),
     filter = TRUE
   )

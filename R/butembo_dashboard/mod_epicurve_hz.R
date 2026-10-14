@@ -2,9 +2,9 @@
 
 EPICURVE_HZ_ZONES <- c("Katwa", "Butembo", "Musienene")
 EPICURVE_HZ_DATES <- c(
-  "Date of lab confirmation" = "date_lab_result_1",
-  "Date of onset" = "date_symptom_onset",
-  "Date of notification" = "date_notification"
+  "Date de confirmation labo" = "date_lab_result_1",
+  "Date de début des symptômes" = "date_symptom_onset",
+  "Date de notification" = "date_notification"
 )
 
 mod_epicurve_hz_ui <- function(id, group_vars) {
@@ -30,8 +30,8 @@ mod_epicurve_hz_ui <- function(id, group_vars) {
               ns("date_var"),
               "Date",
               choices = c(
-                "Lab confirmation" = "date_lab_result_1",
-                Onset = "date_symptom_onset",
+                "Confirmation labo" = "date_lab_result_1",
+                "Début des symptômes" = "date_symptom_onset",
                 Notification = "date_notification"
               ),
               selected = "date_lab_result_1",
@@ -40,60 +40,60 @@ mod_epicurve_hz_ui <- function(id, group_vars) {
           ),
           shinyWidgets::radioGroupButtons(
             ns("place_type"),
-            "Place",
-            choices = c(Notification = "notif", Residence = "res"),
+            "Lieu",
+            choices = c(Notification = "notif", "Résidence" = "res"),
             selected = "notif",
             size = "sm"
           ),
           shinyWidgets::radioGroupButtons(
             ns("level"),
-            "Level",
-            choices = c("Health zone" = "adm2", "Health area" = "adm3"),
+            "Niveau",
+            choices = c("Zone de santé" = "adm2", "Aire de santé" = "adm3"),
             selected = "adm2",
             size = "sm"
           ),
           shinyWidgets::radioGroupButtons(
             ns("interval"),
-            "Time interval",
-            choices = c(Day = "day", Week = "week"),
+            "Intervalle de temps",
+            choices = c("Jour" = "day", "Semaine" = "week"),
             selected = "week",
             size = "sm"
           ),
           shinyWidgets::radioGroupButtons(
             ns("scales"),
-            "Y-axis scales",
-            choices = c(Fixed = "fixed", Free = "free_y"),
+            "Échelles de l'axe Y",
+            choices = c("Fixes" = "fixed", "Libres" = "free_y"),
             selected = "fixed",
             size = "sm"
           ),
           shiny::selectInput(
             ns("group_var"),
-            "Group",
-            choices = c("None" = "none", group_vars),
+            "Groupe",
+            choices = c("Aucun" = "none", group_vars),
             selected = "none",
             selectize = FALSE
           ),
           shiny::selectInput(
             ns("order_by"),
-            "Rank places by",
+            "Classer les lieux par",
             choices = c(
-              "Cases last 7 days" = "last_7d",
-              "Cases last 14 days" = "last_14d",
-              "Cases last 21 days" = "last_21d",
-              "Total cases" = "total"
+              "Cas des 7 derniers jours" = "last_7d",
+              "Cas des 14 derniers jours" = "last_14d",
+              "Cas des 21 derniers jours" = "last_21d",
+              "Total des cas" = "total"
             ),
             selected = "total",
             selectize = FALSE
           ),
           shiny::numericInput(
             ns("top_n"),
-            "Show top N places",
+            "Afficher les N premiers lieux",
             value = 6,
             min = 1,
             max = 50,
             step = 1
           ),
-          bslib::input_switch(ns("show_all"), "Show all places", value = FALSE)
+          bslib::input_switch(ns("show_all"), "Afficher tous les lieux", value = FALSE)
         ),
         shiny::tags$div(
           style = "overflow-y: auto; height: 100%;",
@@ -110,7 +110,7 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
 
     place_type <- shiny::reactive(input$place_type %||% "notif")
     place_lab <- shiny::reactive({
-      if (identical(place_type(), "res")) "residence" else "notification"
+      if (identical(place_type(), "res")) "résidence" else "notification"
     })
 
     # Restriction to the three zones follows the place type, whatever level is plotted
@@ -126,7 +126,7 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
     date_col <- shiny::reactive(input$date_var %||% "date_lab_result_1")
 
     output$plot_title <- shiny::renderText({
-      paste0("New cases by place of ", place_lab(), " (", date_lab(), ")")
+      paste0("Nouveaux cas par lieu de ", place_lab(), " (", date_lab(), ")")
     })
 
     # NA dates cannot be placed on the axis
@@ -138,7 +138,7 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
       )
       df_zones() |>
         dplyr::filter(!is.na(.data[[date_col()]])) |>
-        dplyr::mutate(hz = dplyr::coalesce(as.character(.data[[lvl]]), "(Missing)"))
+        dplyr::mutate(hz = dplyr::coalesce(as.character(.data[[lvl]]), getOption("epishiny.na.label")))
     })
 
     output$footnote <- shiny::renderUI({
@@ -147,10 +147,10 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
       htmltools::div(
         class = "card-disclaimer",
         paste0(
-          n_dropped, " of ", n_all, " cases (",
-          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), "%) with ", place_lab(), " in ",
+          n_dropped, " cas sur ", n_all, " (",
+          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), " %) dont le lieu de ", place_lab(), " est ",
           paste(EPICURVE_HZ_ZONES, collapse = ", "),
-          " have no ", date_lab(), " and are not shown."
+          " n'ont pas de ", date_lab(), " et ne sont pas affichés."
         )
       )
     })
@@ -256,7 +256,7 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
           ) +
           ggplot2::scale_x_date(labels = scales::label_date_short()) +
           ggplot2::theme_minimal(base_size = 14) +
-          ggplot2::labs(x = names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()], y = "New cases") +
+          ggplot2::labs(x = names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()], y = "Nouveaux cas") +
           ggplot2::theme(
             strip.text = ggplot2::element_text(face = "bold"),
             panel.grid.minor = ggplot2::element_blank(),

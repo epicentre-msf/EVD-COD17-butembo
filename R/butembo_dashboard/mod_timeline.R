@@ -5,12 +5,12 @@
 
 mod_timeline_ui <- function(
   id,
-  title = "Care timeline",
+  title = "Parcours de soins",
   icon = bsicons::bs_icon("activity"),
-  facility_lab = "Health facility",
-  cases_lab = "Cases to display",
-  agesex_lab = "Show age / sex",
-  incubation_lab = "Assumed incubation (days)",
+  facility_lab = "Formation sanitaire",
+  cases_lab = "Cas à afficher",
+  agesex_lab = "Afficher âge / sexe",
+  incubation_lab = "Incubation supposée (jours)",
   incubation_days = 8,
   incubation_min = 0,
   incubation_max = 21,
@@ -32,7 +32,7 @@ mod_timeline_ui <- function(
       multiple = FALSE,
       options = shinyWidgets::pickerOptions(
         liveSearch = TRUE,
-        noneSelectedText = "All facilities"
+        noneSelectedText = "Toutes les formations sanitaires"
       )
     ),
     shinyWidgets::pickerInput(
@@ -44,7 +44,7 @@ mod_timeline_ui <- function(
         liveSearch = TRUE,
         actionsBox = TRUE,
         selectedTextFormat = "count > 2",
-        noneSelectedText = "No cases"
+        noneSelectedText = "Aucun cas"
       )
     ),
     shinyWidgets::materialSwitch(
@@ -239,7 +239,7 @@ mod_timeline_server <- function(
       shinyWidgets::updatePickerInput(
         session,
         "facility",
-        choices = c("All facilities" = "", fac_choices),
+        choices = c("Toutes les formations sanitaires" = "", fac_choices),
         selected = shiny::isolate(input$facility)
       )
     })
@@ -301,7 +301,7 @@ mod_timeline_server <- function(
 
     output$chart <- highcharter::renderHighchart({
       ids <- plot_ids()
-      shiny::validate(shiny::need(length(ids) > 0, "No cases to display"))
+      shiny::validate(shiny::need(length(ids) > 0, "Aucun cas à afficher"))
 
       tl <- cases_dat() |>
         dplyr::filter(.id %in% ids) |>
@@ -415,7 +415,7 @@ mod_timeline_server <- function(
         )
 
       month_fmt <- highcharter::JS(
-        "function() { var m = ['January','February','March','April','May','June','July','August','September','October','November','December']; var d = new Date(this.value); return m[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }"
+        "function() { var m = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']; var d = new Date(this.value); return m[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }"
       )
 
       highcharter::highchart() |>
@@ -465,48 +465,48 @@ mod_timeline_server <- function(
           xrange = list(pointWidth = 16, borderRadius = 0, grouping = FALSE)
         ) |>
         highcharter::hc_add_series(
-          name = "Disease",
+          name = "Maladie",
           data = highcharter::list_parse(bar_pts),
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>Disease ({point.outcome})</b><br>Onset: {point.d_start}<br>Exit: {point.d_end}"
+            pointFormat = "<b>Maladie ({point.outcome})</b><br>Début : {point.d_start}<br>Sortie : {point.d_end}"
           )
         ) |>
         highcharter::hc_add_series(
-          name = "Assumed incubation",
+          name = "Incubation supposée",
           data = highcharter::list_parse(incub_pts),
           enableMouseTracking = nrow(incub_pts) > 0,
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>Assumed incubation</b><br>From {point.d_start} to {point.d_end}"
+            pointFormat = "<b>Incubation supposée</b><br>Du {point.d_start} au {point.d_end}"
           )
         ) |>
         highcharter::hc_add_series(
-          name = "Facilities",
+          name = "Formations sanitaires",
           data = highcharter::list_parse(hf_pts),
           dataLabels = list(enabled = TRUE, format = "{point.abbr}"),
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>{point.hf_name}</b><br>From {point.d_start} to {point.d_end}"
+            pointFormat = "<b>{point.hf_name}</b><br>Du {point.d_start} au {point.d_end}"
           )
         ) |>
         # onset and exit last so they stay above the structure rectangles
         highcharter::hc_add_series(
-          name = "Symptom onset",
+          name = "Début des symptômes",
           data = highcharter::list_parse(onset_pts),
           showInLegend = FALSE,
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>Symptom onset</b><br>{point.d_start}"
+            pointFormat = "<b>Début des symptômes</b><br>{point.d_start}"
           )
         ) |>
         highcharter::hc_add_series(
-          name = "Exit",
+          name = "Sortie",
           data = highcharter::list_parse(exit_pts),
           showInLegend = FALSE,
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>Exit ({point.outcome})</b><br>{point.d_end}"
+            pointFormat = "<b>Sortie ({point.outcome})</b><br>{point.d_end}"
           )
         ) |>
         highcharter::hc_legend(enabled = FALSE)

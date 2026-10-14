@@ -5,14 +5,14 @@
 mod_lab_ui <- function(id) {
   ns <- NS(id)
   nav_panel(
-    title = tags$span(bsicons::bs_icon("clipboard-data"), "Lab data"),
+    title = tags$span(bsicons::bs_icon("clipboard-data"), "Données de laboratoire"),
     value = "lab",
     bslib::layout_columns(
       col_widths = c(3, 3, 3, 3),
       fill = FALSE,
       class = "pt-2 hgap-tight",
       value_box(
-        title = "Samples",
+        title = "Échantillons",
         value = textOutput(ns("samples"), inline = TRUE),
         p(uiOutput(ns("samples_info"), inline = TRUE)),
         showcase_layout = "left center",
@@ -20,7 +20,7 @@ mod_lab_ui <- function(id) {
         height = "85px"
       ),
       value_box(
-        title = "Positive",
+        title = "Positifs",
         value = textOutput(ns("positive"), inline = TRUE),
         p(uiOutput(ns("positive_info"), inline = TRUE)),
         showcase_layout = "left center",
@@ -29,10 +29,10 @@ mod_lab_ui <- function(id) {
       ),
       value_box(
         title = vb_title_info(
-          "Time from sampling to result",
+          "Délai prélèvement-résultat",
           paste0(
-            "Mean days from sampling to lab result.<br><br>",
-            "Samples with a missing date or a result before sampling are excluded."
+            "Nombre moyen de jours entre le prélèvement et le résultat.<br><br>",
+            "Les échantillons sans date ou avec un résultat antérieur au prélèvement sont exclus."
           )
         ),
         value = textOutput(ns("delay"), inline = TRUE),
@@ -42,7 +42,7 @@ mod_lab_ui <- function(id) {
         height = "85px"
       ),
       value_box(
-        title = "Latest lab result",
+        title = "Dernier résultat labo",
         value = textOutput(ns("latest"), inline = TRUE),
         p(uiOutput(ns("latest_info"), inline = TRUE)),
         showcase_layout = "left center",
@@ -52,26 +52,32 @@ mod_lab_ui <- function(id) {
     ),
     bslib::layout_columns(
       col_widths = c(7, 5),
-      time_ui(
-        id = ns("curve"),
-        title = "Samples tested",
-        date_vars = lab_date_vars,
-        group_vars = lab_group_vars,
-        date_interval_default = "week",
-        group_var_default = "lab_result",
-        ratio_line_lab = "Show positivity line?"
+      do.call(
+        time_ui,
+        c(
+          list(
+            id = ns("curve"),
+            title = "Échantillons testés",
+            date_vars = lab_date_vars,
+            group_vars = lab_group_vars,
+            date_interval_default = "week",
+            group_var_default = "lab_result",
+            ratio_line_lab = "Afficher la courbe de positivité ?"
+          ),
+          time_ui_labs
+        )
       ),
       bslib::card(
         full_screen = TRUE,
         bslib::card_header(
           class = "d-flex justify-content-between align-items-center",
-          "Time from notification to result",
+          "Délai notification-résultat",
           shiny::selectInput(
             ns("delay_agg"),
             label = NULL,
-            choices = c(Week = "week", Month = "month"),
+            choices = c("Semaine" = "week", "Mois" = "month"),
             selected = "week",
-            width = "110px"
+            width = "130px"
           )
         ),
         highcharter::highchartOutput(ns("delay_trend"), height = "100%")
@@ -84,7 +90,7 @@ mod_lab_ui <- function(id) {
 # Reuses time_ui's input ids, so the UI is unchanged.
 lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
   moduleServer(id, function(input, output, session) {
-    na_label <- getOption("epishiny.na.label", "(Missing)")
+    na_label <- getOption("epishiny.na.label", "(Manquant)")
     tested_levels <- c("Positif", "Négatif")
 
     observeEvent(input$toggle_sidebar, {
@@ -133,7 +139,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
             unit = interval,
             week_start = getOption("epishiny.week.start", 1)
           ),
-          grp = if (grp == "n") "All samples" else .data[[grp]],
+          grp = if (grp == "n") "Tous les échantillons" else .data[[grp]],
           is_tested = .data$lab_result %in% tested_levels,
           is_pos = .data$lab_result %in% "Positif"
         ) |>
@@ -222,7 +228,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
 
     output$chart <- highcharter::renderHighchart({
       out <- df_curve()
-      shiny::validate(shiny::need(nrow(out) > 0, "No data to display"))
+      shiny::validate(shiny::need(nrow(out) > 0, "Aucune donnée à afficher"))
 
       grp <- input$group
       date_var <- input$date
@@ -262,7 +268,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
             data = d_g,
             type = "column",
             highcharter::hcaes(x = x, y = y_n),
-            name = if (grp == "n") "Samples" else groups[i],
+            name = if (grp == "n") "Échantillons" else groups[i],
             id = paste0("col_", i),
             color = pal[i]
           )
@@ -273,7 +279,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
               data = d_g,
               type = "line",
               highcharter::hcaes(x = x, y = y_r),
-              name = paste("Positivity:", groups[i]),
+              name = paste("Positivité :", groups[i]),
               linkedTo = paste0("col_", i),
               yAxis = 1,
               zIndex = 10,
@@ -290,7 +296,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
             data = out[out$grp == groups[1], ],
             type = "line",
             highcharter::hcaes(x = x, y = y_r),
-            name = "Positivity",
+            name = "Positivité",
             yAxis = 1,
             zIndex = 10,
             color = "black",
@@ -302,7 +308,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
       y_axes <- list(
         list(
           title = list(
-            text = if (cumul) "Cumulative number of samples" else "Number of samples"
+            text = if (cumul) "Nombre cumulé d'échantillons" else "Nombre d'échantillons"
           ),
           allowDecimals = FALSE
         )
@@ -311,7 +317,7 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
         y_axes <- c(
           y_axes,
           list(list(
-            title = list(text = if (cumul) "Cumulative positivity" else "Positivity"),
+            title = list(text = if (cumul) "Positivité cumulée" else "Positivité"),
             labels = list(enabled = TRUE, format = "{value}%"),
             min = 0,
             max = 100,
@@ -366,11 +372,9 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
           highcharter::hc_credits(
             enabled = TRUE,
             text = paste0(
-              "Missing ",
-              tolower(date_lab),
-              " for ",
               scales::number(n_no_date),
-              " samples"
+              " échantillons sans ",
+              tolower(date_lab)
             )
           )
       }
@@ -413,17 +417,16 @@ mod_lab_server <- function(id, df) {
       n_pos <- sum(d$lab_result == "Positif", na.rm = TRUE)
       n_tested <- sum(d$lab_result %in% c("Positif", "Négatif"))
 
-      delay <- as.numeric(d$date_lab_result - d$date_sampling)
+      # invalid delays are already NA from data prep
+      delay <- d$delay_sampling_result_days
       message(
-        "Lab delay: dropped ",
+        "Lab delay: ",
         sum(is.na(delay)),
-        " with a missing date and ",
-        sum(delay < 0, na.rm = TRUE),
-        " with a negative interval, of ",
+        " of ",
         nrow(d),
-        " samples"
+        " samples without a valid delay"
       )
-      delay <- delay[!is.na(delay) & delay >= 0]
+      delay <- delay[!is.na(delay)]
 
       latest_date <- function(x) {
         if (all(is.na(x))) as.Date(NA) else max(x, na.rm = TRUE)
@@ -452,7 +455,7 @@ mod_lab_server <- function(id, df) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Whole blood",
+          label = "Sang total",
           value = paste0(
             scales::number(s$n_blood),
             " (",
@@ -468,13 +471,13 @@ mod_lab_server <- function(id, df) {
     output$positive_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
-        list(label = "Positivity", value = vb_pct(s$n_pos, s$n_tested))
+        list(label = "Positivité", value = vb_pct(s$n_pos, s$n_tested))
       ))
     })
 
     output$delay <- renderText({
       m <- df_summary()$delay_mean
-      if (is.na(m)) "—" else paste(scales::number(m, accuracy = 0.1), "days")
+      if (is.na(m)) "—" else paste(scales::number(m, accuracy = 0.1), "jours")
     })
 
     output$latest <- renderText({
@@ -486,7 +489,7 @@ mod_lab_server <- function(id, df) {
       s <- df_summary()
       fmt <- \(x) if (is.na(x)) "—" else format(x, "%d %b")
       vb_stat_line(list(
-        list(label = "Mobile lab", value = fmt(s$latest_mobile)),
+        list(label = "Labo mobile", value = fmt(s$latest_mobile)),
         list(label = "INRB", value = fmt(s$latest_inrb))
       ))
     })
@@ -494,7 +497,7 @@ mod_lab_server <- function(id, df) {
     output$delay_info <- renderUI({
       s <- df_summary()
       vb_stat_line(list(
-        list(label = "With both dates", value = vb_pct(s$n_delay, s$n_all))
+        list(label = "Avec les deux dates", value = vb_pct(s$n_delay, s$n_all))
       ))
     })
 
@@ -509,13 +512,12 @@ mod_lab_server <- function(id, df) {
 plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
   agg <- match.arg(agg)
 
-  delay_df <- d |>
-    dplyr::transmute(
-      date_notification,
-      delay = as.numeric(date_lab_result - date_notification)
-    )
-  valid <- delay_df |>
-    dplyr::filter(!is.na(date_notification), !is.na(delay), delay >= 0)
+  delay_df <- dplyr::transmute(
+    d,
+    date_notification,
+    delay = delay_notif_result_days
+  )
+  valid <- dplyr::filter(delay_df, !is.na(date_notification), !is.na(delay))
   n_removed <- nrow(delay_df) - nrow(valid)
 
   summ <- valid |>
@@ -534,7 +536,7 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
     highcharter::hc_title(text = NULL) |>
     highcharter::hc_chart(type = "line", zoomType = "x") |>
     highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
-    highcharter::hc_yAxis(title = list(text = "Mean delay (days)"), min = 0) |>
+    highcharter::hc_yAxis(title = list(text = "Délai moyen (jours)"), min = 0) |>
     highcharter::hc_legend(enabled = FALSE) |>
     highcharter::hc_exporting(enabled = TRUE) |>
     highcharter::hc_tooltip(
@@ -542,7 +544,7 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
       formatter = highcharter::JS(
         "function() {
           return Highcharts.dateFormat('%e %b %Y', this.x) + '<br/>' +
-            'Mean: ' + Highcharts.numberFormat(this.y, 1) + ' days<br/>' +
+            'Moyenne : ' + Highcharts.numberFormat(this.y, 1) + ' jours<br/>' +
             'n = ' + this.point.n;
         }"
       )
@@ -551,7 +553,7 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
       enabled = TRUE,
       text = paste0(
         scales::number(n_removed),
-        " samples excluded (missing date or negative delay)"
+        " échantillons exclus (date manquante ou délai invalide)"
       )
     )
 
@@ -561,7 +563,7 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
         data = summ,
         type = "line",
         highcharter::hcaes(x = x, y = mean),
-        name = "Mean delay",
+        name = "Délai moyen",
         marker = list(enabled = TRUE, radius = 3)
       )
   }

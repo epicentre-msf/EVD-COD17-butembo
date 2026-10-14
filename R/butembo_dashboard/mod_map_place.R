@@ -6,7 +6,7 @@
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-BOUNDARY_LEVELS <- c("Province", "Health Zone", "Health Area")
+BOUNDARY_LEVELS <- c("Province", "Zone de santé", "Aire de santé")
 MAP_BUBBLE_COL <- "#c10000"
 SITE_PIN_ID <- "site_pin"
 SITE_PIN_PNG <- "www/img/site_pin.png"
@@ -30,7 +30,7 @@ mod_map_place_ui <- function(id, full_screen = TRUE) {
     full_screen = full_screen,
     bslib::card_header(
       class = "d-flex align-items-center",
-      tags$span(class = "fw-semibold me-3", "Place"),
+      tags$span(class = "fw-semibold me-3", "Lieu"),
       tags$div(class = "me-auto", uiOutput(ns("footer"))),
       tags$div(
         class = "d-flex align-items-center gap-2",
@@ -38,14 +38,14 @@ mod_map_place_ui <- function(id, full_screen = TRUE) {
           ns("level"),
           label = NULL,
           choices = BOUNDARY_LEVELS,
-          selected = "Health Area",
+          selected = "Aire de santé",
           width = "170px",
           options = list(openOnFocus = FALSE)
         ),
         shiny::selectizeInput(
           ns("location_type"),
           label = NULL,
-          choices = c("Residence" = "res", "Notification" = "notif"),
+          choices = c("Résidence" = "res", "Notification" = "notif"),
           selected = "res",
           width = "170px",
           options = list(openOnFocus = FALSE)
@@ -108,7 +108,7 @@ mod_map_place_server <- function(
     }
 
     active_geo <- reactive({
-      lvl <- input$level %||% "Health Area"
+      lvl <- input$level %||% "Aire de santé"
       loc <- input$location_type %||% "res"
       gd <- geo_sets[[loc]]
       gd[[which(purrr::map_chr(gd, "layer_name") == lvl)[1]]]
@@ -169,7 +169,7 @@ mod_map_place_server <- function(
     output$map <- mapgl::renderMaplibre({
       init_geo <- isolate(polys())
       init_bubbles <- isolate(map_bubbles())
-      init_level <- isolate(input$level %||% "Health Area")
+      init_level <- isolate(input$level %||% "Aire de santé")
 
       m <- suppressWarnings(max(init_bubbles$indicator_value, na.rm = TRUE))
       if (!is.finite(m) || m <= 0) {
@@ -342,11 +342,11 @@ mod_map_place_server <- function(
       loc_lab <- if (identical(input$location_type, "notif")) {
         "notification"
       } else {
-        "residence"
+        "résidence"
       }
       glue::glue(
-        "Missing {tolower(active_geo()$layer_name)} of \\
-         {loc_lab} for {lab} patients"
+        "{active_geo()$layer_name} de {loc_lab} manquante pour \\
+         {lab} patients"
       )
     })
 
@@ -375,7 +375,7 @@ mod_map_place_server <- function(
       htmltools::tagList(
         htmltools::div(
           style = "font-weight: 600; margin-bottom: 4px;",
-          "Cases"
+          "Cas"
         ),
         htmltools::div(
           style = "display: flex; gap: 14px; align-items: flex-end;",
@@ -482,7 +482,7 @@ tt_html <- function(name, total) {
   glue::glue(
     "<div class='map-tt'>",
     "<div class='map-tt-name'>{name}</div>",
-    "<div class='map-tt-count'>n cases: {format(total, big.mark = ' ', scientific = FALSE, trim = TRUE)}</div>",
+    "<div class='map-tt-count'>Cas : {format(total, big.mark = ' ', scientific = FALSE, trim = TRUE)}</div>",
     "</div>"
   )
 }

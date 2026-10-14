@@ -37,14 +37,14 @@ mod_delay_ui <- function(
   inputs_ui <- tagList(
     selectInput(
       ns("group_var"),
-      label = "Select grouping variable",
+      label = "Choisir la variable de regroupement",
       choices = NULL,
       width = "100%",
       selectize = FALSE
     ),
     sliderInput(
       ns("co_value"),
-      label = "Maximum delay",
+      label = "Délai maximum",
       min = 0,
       max = 30,
       value = 30,
@@ -55,7 +55,7 @@ mod_delay_ui <- function(
       id = ns("bar_inputs"),
       selectInput(
         ns("delays"),
-        label = "Select delay",
+        label = "Choisir le délai",
         choices = NULL,
         width = "100%",
         selectize = FALSE
@@ -63,20 +63,20 @@ mod_delay_ui <- function(
       shinyWidgets::checkboxGroupButtons(
         inputId = ns("show_stat"),
         size = "sm",
-        label = "Select statistics to display:",
-        choices = c("Mean" = "mean", "Median" = "median"),
+        label = "Statistiques à afficher :",
+        choices = c("Moyenne" = "mean", "Médiane" = "median"),
         selected = c("mean", "median")
       ),
       bslib::input_switch(
         ns("fit_dist"),
-        label = "Fit Distribution",
+        label = "Ajuster une distribution",
         value = FALSE
       ),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("fit_dist")),
         selectInput(
           ns("which_dist"),
-          label = "Select Distribution",
+          label = "Choisir la distribution",
           choices = c("gamma", "weibull", "lnorm"),
           selected = "gamma",
           multiple = TRUE,
@@ -88,21 +88,21 @@ mod_delay_ui <- function(
       id = ns("timeline_inputs"),
       selectInput(
         ns("dates"),
-        label = "Select events",
+        label = "Choisir les événements",
         choices = NULL,
         multiple = TRUE,
         width = "100%"
       ),
       radioButtons(
         inputId = ns("mean_median"),
-        label = "Select Statistic",
-        choices = c("Mean" = "mean", "Median" = "median"),
+        label = "Choisir la statistique",
+        choices = c("Moyenne" = "mean", "Médiane" = "median"),
         selected = "mean",
         inline = TRUE
       ),
       bslib::input_switch(
         ns("display_lab"),
-        label = "Display labels",
+        label = "Afficher les étiquettes",
         value = TRUE
       )
     ),
@@ -110,15 +110,15 @@ mod_delay_ui <- function(
       id = ns("trend_inputs"),
       selectInput(
         ns("trend_delays"),
-        label = "Select delays",
+        label = "Choisir les délais",
         choices = NULL,
         multiple = TRUE,
         width = "100%"
       ),
       radioButtons(
         inputId = ns("trend_agg"),
-        label = "Aggregate by",
-        choices = c("Week" = "week", "Month" = "month"),
+        label = "Agréger par",
+        choices = c("Semaine" = "week", "Mois" = "month"),
         selected = "week",
         inline = TRUE
       )
@@ -147,13 +147,13 @@ mod_delay_ui <- function(
     ),
 
     bslib::nav_panel(
-      title = tags$span(bsicons::bs_icon("calendar-week-fill"), "Timeline"),
+      title = tags$span(bsicons::bs_icon("calendar-week-fill"), "Chronologie"),
       value = "timeline_nav",
       highcharter::highchartOutput(ns("delay_timeline"))
     ),
 
     bslib::nav_panel(
-      title = tags$span(bsicons::bs_icon("graph-up"), "Trend"),
+      title = tags$span(bsicons::bs_icon("graph-up"), "Tendance"),
       value = "trend_nav",
       highcharter::highchartOutput(ns("delay_trend"))
     )
@@ -217,7 +217,7 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
         date_combinations,
         \(x) {
           labs <- if (rlang::is_named(x)) names(x) else x
-          paste(labs, collapse = " to ")
+          paste(labs, collapse = " à ")
         }
       )
 
@@ -230,23 +230,18 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
         )
       })
 
-      trend_choices <- delay_choices[
-        delay_choices %in%
-          c(
-            "date_symptom_onset__date_notification",
-            "date_symptom_onset__date_admission_eff",
-            "date_symptom_onset__date_exit_eff",
-            "date_notification__date_lab_result_1",
-            "date_admission_eff__date_exit_eff"
-          )
-      ]
+      # every pair is selectable; only these two start displayed
+      trend_default <- c(
+        "date_symptom_onset__date_notification",
+        "date_notification__date_admission_eff"
+      )
 
-      observeEvent(trend_choices, {
+      observeEvent(delay_choices, {
         updateSelectInput(
           session,
           "trend_delays",
-          choices = trend_choices,
-          selected = trend_choices
+          choices = delay_choices,
+          selected = intersect(trend_default, delay_choices)
         )
       })
 
@@ -255,7 +250,7 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
         updateSelectInput(
           session,
           "group_var",
-          choices = c("None" = "none", group_vars),
+          choices = c("Aucun" = "none", group_vars),
           selected = "none"
         )
       })
@@ -340,6 +335,7 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
 #' Plot mean delays over time
 #'
 #' One line per delay: mean delay (days) by week or month of symptom onset.
+#' Each point is a circle sized by the number of cases behind it.
 #' Delays outside 0 to `co_value` are excluded and counted in the credits.
 #'
 #' @param trend_df Data frame of delay pair columns plus `date_symptom_onset`.
@@ -390,13 +386,22 @@ plot_delay_trend <- function(
     ) |>
     dplyr::arrange(delay, bin)
 
-  # Set1 caps at 9 colours but five events give 10 delay pairs
-  pal <- grDevices::hcl.colors(length(delays), "Dark 3")
+  # fixed per delay, so a colour keeps its meaning when the selection changes
+  trend_pal <- c(
+    date_symptom_onset__date_notification = "#4E79A7",
+    date_notification__date_admission_eff = "#F28E2B",
+    date_admission_eff__date_exit_eff = "#59A14F",
+    date_symptom_onset__date_exit_eff = "#B07AA1"
+  )
+  # pairs without a fixed colour draw from a qualitative fallback
+  pal <- unname(trend_pal[delays])
+  missing_col <- is.na(pal)
+  pal[missing_col] <- grDevices::hcl.colors(sum(missing_col), "Dark 3")
   hc <- highcharter::highchart() |>
     highcharter::hc_chart(type = "line", zoomType = "x") |>
     highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
     highcharter::hc_yAxis(
-      title = list(text = "Mean delay (days)"),
+      title = list(text = "Délai moyen (jours)"),
       min = 0
     ) |>
     highcharter::hc_legend(enabled = TRUE) |>
@@ -408,15 +413,18 @@ plot_delay_trend <- function(
         "function() {
           return '<b>' + this.series.name + '</b><br/>' +
             Highcharts.dateFormat('%e %b %Y', this.x) + '<br/>' +
-            'Mean: ' + Highcharts.numberFormat(this.y, 1) + ' days<br/>' +
+            'Moyenne : ' + Highcharts.numberFormat(this.y, 1) + ' jours<br/>' +
             'n = ' + this.point.n;
         }"
       )
     ) |>
     highcharter::hc_credits(
       enabled = TRUE,
-      text = paste0(n_removed, " delays removed (negative or over cut-off)")
+      text = paste0(n_removed, " délais exclus (négatifs ou au-delà du seuil)")
     )
+
+  # one radius scale across all series, so size means the same n everywhere
+  max_n <- max(summ$n, 1)
 
   for (i in seq_along(delays)) {
     d <- summ |>
@@ -427,14 +435,33 @@ plot_delay_trend <- function(
       next
     }
     label <- names(delay_choices)[match(delays[[i]], delay_choices)]
+    # area-proportional: radius grows with sqrt(n), from 3 to 12 px
+    pts <- purrr::pmap(
+      list(d$x, d$mean, d$n),
+      \(x, y, n) {
+        list(
+          x = x,
+          y = y,
+          n = n,
+          marker = list(radius = 3 + 9 * sqrt(n / max_n))
+        )
+      }
+    )
     hc <- hc |>
       highcharter::hc_add_series(
-        data = d,
+        data = pts,
         type = "line",
-        highcharter::hcaes(x = x, y = mean),
         name = label,
-        color = pal[[i]],
-        marker = list(enabled = TRUE, radius = 3)
+        # faint line, so the circles carry the signal
+        color = grDevices::adjustcolor(pal[[i]], alpha.f = 0.35),
+        lineWidth = 1,
+        marker = list(
+          enabled = TRUE,
+          symbol = "circle",
+          fillColor = grDevices::adjustcolor(pal[[i]], alpha.f = 0.75),
+          lineColor = "white",
+          lineWidth = 1
+        )
       )
   }
 
@@ -665,36 +692,36 @@ plot_delay_bar <- function(
       names(params) <- names(results_df)[-1] # Assign parameter names
 
       tooltip_text <- paste0(
-        "<b>Distribution:</b> ",
+        "<b>Distribution :</b> ",
         dist_name,
         "<br>",
         if (!is.na(params["shape"])) {
-          paste0("<b>Shape:</b> ", round(params["shape"], 4), "<br>")
+          paste0("<b>Forme :</b> ", round(params["shape"], 4), "<br>")
         } else {
           ""
         },
         if (!is.na(params["rate"])) {
-          paste0("<b>Rate:</b> ", round(params["rate"], 4), "<br>")
+          paste0("<b>Taux :</b> ", round(params["rate"], 4), "<br>")
         } else {
           ""
         },
         if (!is.na(params["scale"])) {
-          paste0("<b>Scale:</b> ", round(params["scale"], 4), "<br>")
+          paste0("<b>Échelle :</b> ", round(params["scale"], 4), "<br>")
         } else {
           ""
         },
         if (!is.na(params["meanlog"])) {
-          paste0("<b>Meanlog:</b> ", round(params["meanlog"], 4), "<br>")
+          paste0("<b>Meanlog :</b> ", round(params["meanlog"], 4), "<br>")
         } else {
           ""
         },
         if (!is.na(params["sdlog"])) {
-          paste0("<b>Sdlog:</b> ", round(params["sdlog"], 4), "<br>")
+          paste0("<b>Sdlog :</b> ", round(params["sdlog"], 4), "<br>")
         } else {
           ""
         },
         "<br>",
-        "<b>Log-likelihood:</b> ",
+        "<b>Log-vraisemblance :</b> ",
         round(results_df$loglik[i], 4)
       )
 
@@ -735,12 +762,12 @@ plot_delay_bar <- function(
       dplyr::arrange(timespan) |>
       dplyr::mutate(
         tooltip = paste0(
-          "<b>Delay:</b> ",
+          "<b>Délai :</b> ",
           timespan,
-          " days",
+          " jours",
           "<br>",
           n,
-          " occurences"
+          " occurrences"
         )
       )
   } else {
@@ -761,12 +788,12 @@ plot_delay_bar <- function(
           "<b>",
           .data[[group_var]],
           "</b><br>",
-          "<b>Delay:</b> ",
+          "<b>Délai :</b> ",
           timespan,
-          " days",
+          " jours",
           "<br>",
           n,
-          " occurences"
+          " occurrences"
         )
       )
   }
@@ -821,8 +848,8 @@ plot_delay_bar <- function(
   if (fit_dist) {
     hc <- hc |>
       highcharter::hc_yAxis_multiples(
-        list(title = list(text = "Counts"), opposite = FALSE),
-        list(title = list(text = "Density"), opposite = TRUE)
+        list(title = list(text = "Effectifs"), opposite = FALSE),
+        list(title = list(text = "Densité"), opposite = TRUE)
       ) |>
       # Add Gamma Density Curve
       highcharter::hc_add_series(
@@ -858,7 +885,7 @@ plot_delay_bar <- function(
           zIndex = 1,
           value = stat_df$mean,
           label = list(
-            text = "Mean",
+            text = "Moyenne",
             verticalAlign = "top",
             textAlign = "left"
           )
@@ -876,7 +903,7 @@ plot_delay_bar <- function(
           zIndex = 1,
           value = stat_df$median,
           label = list(
-            text = "Median",
+            text = "Médiane",
             verticalAlign = "top",
             textAlign = "left"
           )
@@ -892,7 +919,7 @@ plot_delay_bar <- function(
     highcharter::hc_xAxis(
       type = "category",
       categories = as.character(0:axis_max), # explicit full sequence, numeric order
-      title = list(text = "Delay (days)"),
+      title = list(text = "Délai (jours)"),
       allowDecimals = FALSE,
       plotLines = stat_line
     ) |>
@@ -908,7 +935,7 @@ plot_delay_bar <- function(
     highcharter::hc_credits(
       enabled = TRUE,
       text = glue::glue(
-        "Using {invalid_df$n_valid} valid delays ({invalid_df$n_na} missing, {invalid_df$n_co + invalid_df$n_invalid} invalid)"
+        "{invalid_df$n_valid} délais valides utilisés ({invalid_df$n_na} manquants, {invalid_df$n_co + invalid_df$n_invalid} invalides)"
       )
     )
 
@@ -1026,8 +1053,8 @@ plot_delay_timeline <- function(
     dplyr::mutate(
       label = ifelse(
         days == 0,
-        "< 1 day",
-        ifelse(days == 1, paste0(days, " day"), paste0(days, " days"))
+        "< 1 jour",
+        ifelse(days == 1, paste0(days, " jour"), paste0(days, " jours"))
       ),
       graph_value = days + 1
     ) |>
@@ -1078,17 +1105,17 @@ plot_delay_timeline <- function(
           first,
           " - ",
           second,
-          "</b><br> Range: ",
+          "</b><br> Étendue : ",
           min,
           " - ",
           max,
-          "<br>Median: ",
+          "<br>Médiane : ",
           label[stat == "median"],
-          "<br>Mean: ",
+          "<br>Moyenne : ",
           label[stat == "mean"],
-          "<br><hr><i>based on ",
+          "<br><hr><i>basé sur ",
           n_valid,
-          " valid intervals"
+          " intervalles valides"
         )
       ) |>
       dplyr::filter(stat == statistic)
@@ -1101,17 +1128,17 @@ plot_delay_timeline <- function(
           first,
           " - ",
           second,
-          "</b><br> Range: ",
+          "</b><br> Étendue : ",
           min,
           " - ",
           max,
-          "<br>Median: ",
+          "<br>Médiane : ",
           label[stat == "median"],
-          "<br>Mean: ",
+          "<br>Moyenne : ",
           label[stat == "mean"],
-          "<br><hr><i>based on ",
+          "<br><hr><i>basé sur ",
           n_valid,
-          " valid intervals"
+          " intervalles valides"
         )
       ) |>
       dplyr::filter(stat == statistic)
@@ -1245,7 +1272,7 @@ plot_delay_timeline <- function(
     highcharter::hc_credits(
       enabled = TRUE,
       text = glue::glue(
-        "{sum(c(invalid_df$n_invalid, invalid_df$n_co), na.rm = TRUE)} ranges removed ({sum(na.rm = TRUE, invalid_df$n_invalid)} negatives, {sum(na.rm = TRUE, invalid_df$n_co)} over cut-Off)"
+        "{sum(c(invalid_df$n_invalid, invalid_df$n_co), na.rm = TRUE)} intervalles exclus ({sum(na.rm = TRUE, invalid_df$n_invalid)} négatifs, {sum(na.rm = TRUE, invalid_df$n_co)} au-delà du seuil)"
       )
     )
   return(hc)

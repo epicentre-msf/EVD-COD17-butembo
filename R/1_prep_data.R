@@ -9,7 +9,7 @@
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- TRUE
 # FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- FALSE
+PREP_LAB_DATA <- TRUE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 
@@ -603,10 +603,14 @@ hf_flows |>
 # Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
 if (PREP_LAB_DATA) {
   # load
-  lab_inrb <- rio::import(latest_inrb_lab_path, skip = 7) |>
+  lab_inrb <- rio::import(
+    latest_inrb_lab_path,
+    skip = 7
+  ) |>
     as_tibble() |>
     clean_names() |>
-    remove_empty()
+    remove_empty(c("rows", "cols")) |>
+    select(1:20)
 
   lab_inrb_clean <- lab_inrb |>
     transmute(
@@ -683,7 +687,23 @@ if (PREP_LAB_DATA) {
     )
 
   lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean) |>
-    mutate(lab_result = factor(lab_result, levels = c("Négatif", "Positif")))
+    mutate(
+      lab_result = factor(lab_result, levels = c("Négatif", "Positif")),
+      delay_sampling_result_days = as.numeric(date_lab_result - date_sampling),
+      delay_notif_result_days = as.numeric(date_lab_result - date_notification)
+    )
+
+  # negative delays are entry errors; over 15 days is implausible for a lab turnaround
+  max_lab_delay <- 15
+  for (col in c("delay_sampling_result_days", "delay_notif_result_days")) {
+    n_valid_before <- sum(!is.na(lab_data[[col]]))
+    invalid <- !is.na(lab_data[[col]]) &
+      (lab_data[[col]] < 0 | lab_data[[col]] > max_lab_delay)
+    lab_data[[col]][invalid] <- NA_real_
+    cli::cli_alert_info(
+      "{col}: {sum(invalid)} of {n_valid_before} set to NA (negative or > {max_lab_delay} days)"
+    )
+  }
 } else {
   # reuse the previous export, so the Lab tab keeps its data
   stopifnot(

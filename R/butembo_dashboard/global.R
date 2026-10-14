@@ -7,10 +7,28 @@ suppressPackageStartupMessages(library(mapgl))
 suppressPackageStartupMessages(library(shinyjs))
 suppressPackageStartupMessages(library(reactable))
 
+# French month and day names for every highcharter chart
 options(
-  epishiny.na.label = "(Missing)",
-  epishiny.count.label = "Cases",
-  epishiny.week.letter = "W",
+  highcharter.lang = list(
+    months = c(
+      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
+      "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    ),
+    shortMonths = c(
+      "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août",
+      "sept.", "oct.", "nov.", "déc."
+    ),
+    weekdays = c(
+      "Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"
+    ),
+    shortWeekdays = c("Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam")
+  )
+)
+
+options(
+  epishiny.na.label = "(Manquant)",
+  epishiny.count.label = "Cas",
+  epishiny.week.letter = "S",
   epishiny.week.start = 1
 )
 
@@ -63,14 +81,14 @@ geo_data <- list(
     join_by = c("pcode" = "adm1_pcode__notif") # geo to data join vars: LHS = sf, RHS = data
   ),
   geo_layer(
-    layer_name = "Health Zone",
+    layer_name = "Zone de santé",
     sf = app_data$admin_data$adm2,
     name_var = "adm2_name",
     pop_var = "adm2_pop",
     join_by = c("pcode" = "adm2_pcode__notif")
   ),
   geo_layer(
-    layer_name = "Health Area",
+    layer_name = "Aire de santé",
     sf = app_data$admin_data$adm3,
     name_var = "adm3_name",
     join_by = c("pcode" = "adm3_pcode__notif")
@@ -87,14 +105,14 @@ geo_data_res <- list(
     join_by = c("pcode" = "adm1_pcode__res")
   ),
   geo_layer(
-    layer_name = "Health Zone",
+    layer_name = "Zone de santé",
     sf = app_data$admin_data$adm2,
     name_var = "adm2_name",
     pop_var = "adm2_pop",
     join_by = c("pcode" = "adm2_pcode__res")
   ),
   geo_layer(
-    layer_name = "Health Area",
+    layer_name = "Aire de santé",
     sf = app_data$admin_data$adm3,
     name_var = "adm3_name",
     join_by = c("pcode" = "adm3_pcode__res")
@@ -129,33 +147,47 @@ facilities <- tibble::tribble(
 
 # define date variables in data as named list to be used in app
 date_vars <- c(
-  "Date of Lab confirmation" = "date_lab_result_1",
-  "Date of notification" = "date_notification",
-  "Date of onset" = "date_symptom_onset",
-  "Date of admission" = "date_admission_eff",
-  "Date of exit" = "date_exit_eff"
+  "Date de confirmation labo" = "date_lab_result_1",
+  "Date de notification" = "date_notification",
+  "Date de début des symptômes" = "date_symptom_onset",
+  "Date d'admission" = "date_admission_eff",
+  "Date de sortie" = "date_exit_eff"
 )
 
 # define categorical grouping variables
 # in data as named list to be used in app
 group_vars <- c(
-  "Health zone" = "adm2_comptabilisation",
-  "Health structure" = "isolation_site_name",
-  "Age group" = "age_group",
-  "Sex" = "sex",
-  "Dead outside isolation" = "dead_out_isolation",
-  "Transmission type" = "transmission_type_1",
-  "Dead on notification" = "dead_upon_notif_grp",
-  "Outcome" = "type_of_exit",
-  "Local Infection" = "infection_butembo"
+  "Zone de santé" = "adm2_comptabilisation",
+  "Structure de santé" = "isolation_site_name",
+  "Groupe d'âge" = "age_group",
+  "Sexe" = "sex",
+  "Décès hors isolement" = "dead_out_isolation",
+  "Type de transmission" = "transmission_type_1",
+  "Décédé à la notification" = "dead_upon_notif_grp",
+  "Issue" = "type_of_exit",
+  "Infection locale" = "infection_butembo"
 )
 
-lab_date_vars <- c("Date of lab result" = "date_lab_result")
+lab_date_vars <- c("Date du résultat labo" = "date_lab_result")
 
 lab_group_vars <- c(
-  "Result" = "lab_result",
+  "Résultat" = "lab_result",
   "Source" = "source",
-  "Sample type" = "sample_type"
+  "Type d'échantillon" = "sample_type"
+)
+
+# labels shared by every time_ui() (surveillance and lab epicurves)
+time_ui_labs <- list(
+  opts_btn_lab = "Options du graphique",
+  date_lab = "Axe des dates",
+  date_int_lab = "Intervalle de dates",
+  date_intervals = c("Jour" = "day", "Semaine" = "week", "Mois" = "month"),
+  count_vars_lab = "Indicateur",
+  groups_lab = "Grouper les données par",
+  no_grouping_lab = "Aucun groupe",
+  bar_stacking_lab = "Empilement des barres",
+  cumul_data_lab = "Afficher les données cumulées ?",
+  zoom_control_lab = "Ajouter un curseur de zoom ?"
 )
 
 # ! Modules ----------------------------
@@ -183,11 +215,11 @@ source("mod_facilities.R")
 
 # chronological order, as the delay module subtracts earlier from later
 delay_date_vars <- c(
-  "Date of onset" = "date_symptom_onset",
-  "Date of notification" = "date_notification",
-  "Date of admission" = "date_admission_eff",
-  "Date of Lab confirmation" = "date_lab_result_1",
-  "Date of exit" = "date_exit_eff"
+  "Date de début des symptômes" = "date_symptom_onset",
+  "Date de notification" = "date_notification",
+  "Date d'admission" = "date_admission_eff",
+  "Date de confirmation labo" = "date_lab_result_1",
+  "Date de sortie" = "date_exit_eff"
 )
 
 # serve www/ (logos, stylesheet) to the browser

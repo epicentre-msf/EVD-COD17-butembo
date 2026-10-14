@@ -157,6 +157,8 @@ patrick_match_path <- fs::path(
 )
 vax_ll_out_dir <- fs::path(butembo_matched_ll_dir, "vaccinated_linelist")
 to_match_dir <- fs::path(butembo_matched_ll_dir, "to-be-matched")
+# nominative confirmed cases with positive tests, written by prep_for_sharing.R
+lab_data_dir <- fs::path(butembo_matched_ll_dir, "lab-data")
 
 # LL facility names matched to the master geobase, with a geometry
 hf_geo_csv <- fs::path(
