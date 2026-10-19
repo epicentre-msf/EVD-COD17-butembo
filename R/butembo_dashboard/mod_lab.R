@@ -50,6 +50,15 @@ mod_lab_ui <- function(id) {
         height = "85px"
       )
     ),
+    div(
+      class = "pt-2 text-nowrap",
+      bslib::input_switch(
+        ns("first_only"),
+        "Considérer que les premiers prélèvements ?",
+        value = FALSE,
+        width = "fit-content"
+      )
+    ),
     bslib::layout_columns(
       col_widths = c(7, 5),
       do.call(
@@ -391,8 +400,31 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
   })
 }
 
-mod_lab_server <- function(id, df) {
+# Unknown first-sample status is dropped too when the filter is on.
+keep_first_samples <- function(d, first_only) {
+  if (!first_only) {
+    return(d)
+  }
+  out <- dplyr::filter(d, .data$first_sample %in% "Oui")
+  message(
+    "Lab first-sample filter: kept ",
+    nrow(out),
+    " of ",
+    nrow(d),
+    " samples (",
+    sum(!d$first_sample %in% "Oui"),
+    " re-samples or unknown dropped)"
+  )
+  out
+}
+
+mod_lab_server <- function(id, df_all) {
   moduleServer(id, function(input, output, session) {
+    df <- reactive({
+      d <- if (is.reactive(df_all)) df_all() else df_all
+      keep_first_samples(d, isTRUE(input$first_only))
+    })
+
     lab_curve_server(
       id = "curve",
       df = df,
@@ -428,12 +460,17 @@ mod_lab_server <- function(id, df) {
       )
       delay <- delay[!is.na(delay)]
 
-      latest_date <- function(x) {
+      # a date without a Positif/Négatif result is not a result
+      latest_date <- function(x, result) {
+        x <- x[!is.na(result)]
         if (all(is.na(x))) as.Date(NA) else max(x, na.rm = TRUE)
       }
-      latest <- latest_date(d$date_lab_result)
+      latest <- latest_date(d$date_lab_result, d$lab_result)
+      # per-lab dates ignore the period filter, so a silent lab keeps its real date
       latest_by_source <- function(src) {
-        latest_date(d$date_lab_result[d$source %in% src])
+        d_src <- keep_first_samples(lab_data, isTRUE(input$first_only))
+        in_src <- d_src$source %in% src
+        latest_date(d_src$date_lab_result[in_src], d_src$lab_result[in_src])
       }
 
       list(

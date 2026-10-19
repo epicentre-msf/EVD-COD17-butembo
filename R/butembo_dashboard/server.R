@@ -62,6 +62,7 @@ server <- function(input, output, session) {
     date_vars = date_vars,
     group_vars = group_vars,
     group_pal = evd_pal,
+    na_colour = na_col,
     show_ratio = TRUE,
     ratio_var = "type_of_exit",
     ratio_lab = "Létalité",
@@ -78,9 +79,14 @@ server <- function(input, output, session) {
       "recolour",
       list(
         id = "curve-chart",
+        na_col = na_col,
+        # every no-value label is appended, since most palettes lack them
         palette = as.list(c(
-          group_pals[[grp]],
-          setNames(na_col, getOption("epishiny.na.label"))
+          group_pals[[grp]][!names(group_pals[[grp]]) %in% na_labels],
+          setNames(
+            rep(na_col, length(na_labels) + 1),
+            c(getOption("epishiny.na.label"), na_labels)
+          )
         ))
       )
     )
@@ -93,6 +99,8 @@ server <- function(input, output, session) {
     place_filter = map_click
   )
 
+  mod_zs_table_server("zs_table", df = df_period)
+
   person_server(
     id = "age_sex",
     df = df_period,
@@ -102,9 +110,22 @@ server <- function(input, output, session) {
     age_group_lab = "Groupe d'âge",
     male_level = "Male",
     female_level = "Female",
+    colours = unname(group_pals$sex[c("Male", "Female")]),
     time_filter = bar_click,
     place_filter = map_click,
     filter_info = filter_data$filter_info
+  )
+
+  # epishiny has a Counts / Percent toggle but starts on counts
+  session$onFlushed(
+    \() {
+      shinyWidgets::updateRadioGroupButtons(
+        session,
+        "age_sex-cnt_pcnt",
+        selected = "n_prop"
+      )
+    },
+    once = TRUE
   )
 
   mod_delay_server(

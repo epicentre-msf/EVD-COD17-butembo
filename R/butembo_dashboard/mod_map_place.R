@@ -46,7 +46,7 @@ mod_map_place_ui <- function(id, full_screen = TRUE) {
           ns("location_type"),
           label = NULL,
           choices = c("Résidence" = "res", "Notification" = "notif"),
-          selected = "res",
+          selected = "notif",
           width = "170px",
           options = list(openOnFocus = FALSE)
         )
@@ -109,7 +109,7 @@ mod_map_place_server <- function(
 
     active_geo <- reactive({
       lvl <- input$level %||% "Aire de santé"
-      loc <- input$location_type %||% "res"
+      loc <- input$location_type %||% "notif"
       gd <- geo_sets[[loc]]
       gd[[which(purrr::map_chr(gd, "layer_name") == lvl)[1]]]
     })

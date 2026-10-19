@@ -11,15 +11,41 @@ suppressPackageStartupMessages(library(reactable))
 options(
   highcharter.lang = list(
     months = c(
-      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
-      "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+      "Janvier",
+      "Février",
+      "Mars",
+      "Avril",
+      "Mai",
+      "Juin",
+      "Juillet",
+      "Août",
+      "Septembre",
+      "Octobre",
+      "Novembre",
+      "Décembre"
     ),
     shortMonths = c(
-      "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août",
-      "sept.", "oct.", "nov.", "déc."
+      "janv.",
+      "févr.",
+      "mars",
+      "avr.",
+      "mai",
+      "juin",
+      "juil.",
+      "août",
+      "sept.",
+      "oct.",
+      "nov.",
+      "déc."
     ),
     weekdays = c(
-      "Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"
+      "Dimanche",
+      "Lundi",
+      "Mardi",
+      "Mercredi",
+      "Jeudi",
+      "Vendredi",
+      "Samedi"
     ),
     shortWeekdays = c("Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam")
   )
@@ -158,9 +184,9 @@ date_vars <- c(
 # in data as named list to be used in app
 group_vars <- c(
   "Zone de santé" = "adm2_comptabilisation",
-  "Structure de santé" = "isolation_site_name",
   "Groupe d'âge" = "age_group",
   "Sexe" = "sex",
+  "Isolé" = "isolated",
   "Décès hors isolement" = "dead_out_isolation",
   "Type de transmission" = "transmission_type_1",
   "Décédé à la notification" = "dead_upon_notif_grp",
@@ -168,12 +194,41 @@ group_vars <- c(
   "Infection locale" = "infection_butembo"
 )
 
+# an "Unknown" level would take a positional epicurve colour; as NA, epishiny
+# labels it (Manquant) and paints it na_col. "Not applicable" stays a level.
+unknown_to_na <- \(x) {
+  x[x %in% "Unknown"] <- NA
+  if (is.factor(x)) factor(x, levels = setdiff(levels(x), "Unknown")) else x
+}
+n_unknown <- vapply(
+  but_ll[unname(group_vars)],
+  \(x) sum(x %in% "Unknown"),
+  integer(1)
+)
+message(
+  "Unknown set to NA: ",
+  paste0(
+    names(n_unknown)[n_unknown > 0],
+    " (",
+    n_unknown[n_unknown > 0],
+    ")",
+    collapse = ", "
+  )
+)
+but_ll <- but_ll |>
+  dplyr::mutate(dplyr::across(
+    dplyr::all_of(unname(group_vars)) &
+      tidyselect::where(\(x) "Unknown" %in% x),
+    unknown_to_na
+  ))
+
 lab_date_vars <- c("Date du résultat labo" = "date_lab_result")
 
 lab_group_vars <- c(
   "Résultat" = "lab_result",
   "Source" = "source",
-  "Type d'échantillon" = "sample_type"
+  "Type d'échantillon" = "sample_type",
+  "Premier prélèvement ?" = "first_sample"
 )
 
 # labels shared by every time_ui() (surveillance and lab epicurves)
@@ -213,6 +268,9 @@ source("mod_epicurve_hz.R")
 # health facilities visited before isolation
 source("mod_facilities.R")
 
+# confirmed cases by health zone
+source("mod_zs_table.R")
+
 # chronological order, as the delay module subtracts earlier from later
 delay_date_vars <- c(
   "Date de début des symptômes" = "date_symptom_onset",
@@ -227,12 +285,16 @@ addResourcePath("assets", "www")
 
 #* Color Palettes  -----------------------
 
+# one light grey for every "no value" level, so missing never reads as a category
+na_col <- "#bdbdbd"
+na_labels <- c("Unknown", "Not applicable")
+
 # epishiny assigns `group_pal` positionally to the grouping factor's levels, so
 # order EVD_status and build the palette from the classes actually present.
 evd_status_cols <- c(
   "Confirmed" = "#9e2a2b", # dark red
   "Probable" = "#e09f3e", # amber
-  "Suspect" = "#bdbdbd", # grey
+  "Suspect" = "#f2d16b", # pale yellow
   "Non cas" = "#6d85b6" # muted blue
 )
 
@@ -240,7 +302,6 @@ evd_pal <- unname(evd_status_cols[c("Confirmed", "Probable")])
 
 # one palette per grouping variable, named by level so a level keeps its
 # colour whatever subset of levels the filters leave
-na_col <- "#666666"
 
 group_pals <- list(
   EVD_status = evd_status_cols,
@@ -268,10 +329,11 @@ group_pals <- list(
     "50-59" = "#00331f",
     "60+" = "#002115"
   ),
+  isolated = c("Yes" = "#2a6f97", "No" = "#9e2a2b"),
   dead_out_isolation = c(
     "Yes" = "#9e2a2b",
     "No" = "#2a6f97",
-    "Not applicable" = "#d9d9d9"
+    "Not applicable" = na_col
   ),
   dead_upon_notif_grp = c(
     "Dead on notification" = "#9e2a2b",
@@ -285,20 +347,25 @@ group_pals <- list(
     "Soins au malade" = "#3a9d8f",
     "Visite occasionnelle" = "#6baed6",
     "Autre" = "#8e5ea2",
-    "Unknown" = "#bdbdbd"
+    "Unknown" = na_col
   ),
   type_of_exit = c(
     "Recovered" = "#3a9d8f",
-    "Abandoned" = "#bdbdbd",
+    "Abandoned" = "#e09f3e",
     "Died" = "#9e2a2b"
   ),
   infection_butembo = c(
     "Local" = "#9e2a2b",
     "Imported" = "#e09f3e",
-    "Unknown" = "#bdbdbd"
+    "Unknown" = na_col
   ),
-  lab_result = c("Négatif" = "#d9d9d9", "Positif" = "#8b0000"),
+  lab_result = c("Négatif" = "#3a9d8f", "Positif" = "#8b0000"),
   source = c("INRB Béni" = "#2a6f97", "Laboratoire Mobile" = "#e9a03b"),
+  first_sample = c(
+    "Oui" = "#2a6f97",
+    "Non" = "#e09f3e",
+    "Unknown" = na_col
+  ),
   sample_type = c(
     "Sang total" = "#9e2a2b",
     "Ecouvillon oral" = "#6d85b6",
@@ -316,7 +383,7 @@ group_colours <- function(
   known <- group_pals[[var]]
   fallback <- epishiny:::epi_pals()$pal20
   cols <- known[levels]
-  cols[levels == missing_label] <- na_col
+  cols[levels %in% c(missing_label, na_labels)] <- na_col
   unmapped <- is.na(cols)
   cols[unmapped] <- rep_len(fallback, sum(unmapped))
   unname(cols)

@@ -69,6 +69,7 @@
    mirrors evd_status_cols["Confirmed"] in global.R - keep the two in sync */
 .vb-confirmed    { border-left: 6px solid #9e2a2b !important; }
 .vb-alive        { border-left: 6px solid #2a9d8f !important; }
+.vb-epiweek      { border-left: 6px solid #495057 !important; }
 .vb-msf          { border-left: 6px solid #e09f3e !important; }
 /* matches evd-2026-app's COL_DEATHS blue, so deaths don't repeat Confirmed's red */
 .vb-deaths       { border-left: 6px solid #2171b5 !important; }
@@ -141,12 +142,4 @@
   font-weight: 700;
   font-size: 0.68rem;
   line-height: 1.2;
-}
-
-/* Stratified epicurves: three date buttons must fit the 250px sidebar */
-.epicurve-hz-date .btn {
-  font-size: 0.75rem;
-  padding-left: 0.4rem;
-  padding-right: 0.4rem;
-  white-space: nowrap;
 }

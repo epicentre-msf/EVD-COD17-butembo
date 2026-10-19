@@ -121,8 +121,8 @@ mod_timeline_server <- function(
   disease_col = "#f2b0b0",
   incubation_col = "#ffe6cc",
   onset_col = "darkred",
-  recovered_col = "#add8e6",
-  died_col = "#7f7f7f",
+  recovered_col = group_pals$type_of_exit[["Recovered"]],
+  died_col = group_pals$type_of_exit[["Died"]],
   recovered_value = "Recovered",
   default_n = 10
 ) {

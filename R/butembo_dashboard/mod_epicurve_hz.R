@@ -1,6 +1,5 @@
 # Faceted epicurves by notification (default) or residence health zone or area, on lab confirmation (default), onset or notification date.
 
-EPICURVE_HZ_ZONES <- c("Katwa", "Butembo", "Musienene")
 EPICURVE_HZ_DATES <- c(
   "Date de confirmation labo" = "date_lab_result_1",
   "Date de début des symptômes" = "date_symptom_onset",
@@ -24,19 +23,12 @@ mod_epicurve_hz_ui <- function(id, group_vars) {
           width = 250,
           position = "right",
           bg = "#fff",
-          shiny::tags$div(
-            class = "epicurve-hz-date",
-            shinyWidgets::radioGroupButtons(
-              ns("date_var"),
-              "Date",
-              choices = c(
-                "Confirmation labo" = "date_lab_result_1",
-                "Début des symptômes" = "date_symptom_onset",
-                Notification = "date_notification"
-              ),
-              selected = "date_lab_result_1",
-              size = "sm"
-            )
+          shiny::selectInput(
+            ns("date_var"),
+            "Date",
+            choices = EPICURVE_HZ_DATES,
+            selected = "date_lab_result_1",
+            selectize = FALSE
           ),
           shinyWidgets::radioGroupButtons(
             ns("place_type"),
@@ -104,6 +96,13 @@ mod_epicurve_hz_ui <- function(id, group_vars) {
   )
 }
 
+# "W42" per tick, with the ISO year beneath the first tick and each year change
+label_epiweek <- function(x) {
+  yr <- format(x, "%G")
+  new_yr <- is.na(dplyr::lag(yr)) | yr != dplyr::lag(yr)
+  paste0("W", as.integer(format(x, "%V")), dplyr::if_else(new_yr, paste0("\n", yr), ""))
+}
+
 mod_epicurve_hz_server <- function(id, df, group_vars) {
   shiny::moduleServer(id, function(input, output, session) {
     n_cols <- 3L
@@ -111,12 +110,6 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
     place_type <- shiny::reactive(input$place_type %||% "notif")
     place_lab <- shiny::reactive({
       if (identical(place_type(), "res")) "résidence" else "notification"
-    })
-
-    # Restriction to the three zones follows the place type, whatever level is plotted
-    df_zones <- shiny::reactive({
-      zone_col <- paste0("adm2_name__", place_type())
-      df() |> dplyr::filter(.data[[zone_col]] %in% EPICURVE_HZ_ZONES)
     })
 
     date_lab <- shiny::reactive({
@@ -136,21 +129,19 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
         "_name__",
         place_type()
       )
-      df_zones() |>
+      df() |>
         dplyr::filter(!is.na(.data[[date_col()]])) |>
         dplyr::mutate(hz = dplyr::coalesce(as.character(.data[[lvl]]), getOption("epishiny.na.label")))
     })
 
     output$footnote <- shiny::renderUI({
-      n_all <- nrow(df_zones())
+      n_all <- nrow(df())
       n_dropped <- n_all - nrow(df_dated())
       htmltools::div(
         class = "card-disclaimer",
         paste0(
           n_dropped, " cas sur ", n_all, " (",
-          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), " %) dont le lieu de ", place_lab(), " est ",
-          paste(EPICURVE_HZ_ZONES, collapse = ", "),
-          " n'ont pas de ", date_lab(), " et ne sont pas affichés."
+          sprintf("%.1f", 100 * n_dropped / max(n_all, 1)), " %) n'ont pas de ", date_lab(), " et ne sont pas affichés."
         )
       )
     })
@@ -213,8 +204,8 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
           )
         }
 
-        # Current calendar week is still filling, so shade it faint
-        this_week <- lubridate::floor_date(Sys.Date(), "week", week_start = 1)
+        # Latest data week is still filling; Sys.Date() lags the data, so key off the data
+        this_week <- lubridate::floor_date(max(d$date), "week", week_start = 1)
 
         d <- d |>
           dplyr::summarise(.by = c(hz, grp, date), n = sum(n)) |>
@@ -238,6 +229,18 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
           )
         }
 
+        # Weekly bars sit on ISO Mondays, so label them by ISO epiweek
+        if (by_week) {
+          x_scale <- ggplot2::scale_x_date(
+            breaks = scales::breaks_width("4 weeks"),
+            labels = label_epiweek
+          )
+          x_lab <- "Semaine épidémiologique (ISO)"
+        } else {
+          x_scale <- ggplot2::scale_x_date(labels = scales::label_date_short())
+          x_lab <- names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()]
+        }
+
         ggplot2::ggplot(d, ggplot2::aes(x = date, y = n, fill = grp, alpha = partial)) +
           ggplot2::geom_col(
             col = "grey70",
@@ -254,9 +257,9 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
             expand = ggplot2::expansion(mult = c(0, 0.08)),
             labels = scales::label_comma()
           ) +
-          ggplot2::scale_x_date(labels = scales::label_date_short()) +
+          x_scale +
           ggplot2::theme_minimal(base_size = 14) +
-          ggplot2::labs(x = names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()], y = "Nouveaux cas") +
+          ggplot2::labs(x = x_lab, y = "Nouveaux cas") +
           ggplot2::theme(
             strip.text = ggplot2::element_text(face = "bold"),
             panel.grid.minor = ggplot2::element_blank(),

@@ -1,24 +1,246 @@
 # Analyse de la situation du CTE de Butembo
 source(here::here("R", "0_global.R"))
 
-# dernier export de la liste linéaire du CTE (Kitatumba)
-etc_ll <- rpxl::rp_xlsb(etc_ll_path, password = "ebolaExport", sheet = 1) |>
+# dernière compilation des listes linéaires CTE
+etc_compilation <- rio::import(latest_etc_compilation) |>
   as_tibble()
 
-# données d'occupation
-occ_dat <- rpxl::rp_xlsb(
-  etc_ll_path,
-  password = "ebolaExport",
-  sheet = "occupancy"
-) |>
-  as_tibble() |>
-  select(-contains("_P"), -contains("column")) |>
+# filter to Butembo sites
+etc_bor <- readRDS(latest_etc_compilation_bor) |>
+  as_tibble()
 
-  # ! this to adress when multiple sites
-  mutate(site = "CTE Kitatumba")
+but_sites <- c("CT Musienene", "CT UCG", "CTE Kitatumba", "CTE Isiro")
+
+
+# filter to Butembo
+but_etc <- etc_compilation |>
+  filter(site %in% but_sites)
+but_etc |> count(EVD_status)
+
+but_bor <- etc_bor |> filter(site %in% but_sites)
+
+#* Résumé Admission exits ------------------------
+
+site_levels <- c("CTE Kitatumba", "CT UCG", "CT Musienene", "CTE Isiro")
+exit_levels <- c("Actif", "Cured", "Died", "Other")
+age_levels <- c("<5", "5-14", "15+", "Total")
+
+etc_adm <- but_etc |>
+  filter(date_admission_eff < as.Date("2026-10-12"))
+
+etc_conf <- etc_adm |>
+  filter(EVD_status %in% c("Confirmed", "Not a case")) |>
+  mutate(
+    status = if_else(EVD_status == "Confirmed", "case", "non_case"),
+    age_yrs = case_match(
+      age_unit,
+      "Months" ~ age / 12,
+      "Days" ~ age / 365.25,
+      .default = age
+    ),
+    age_group = cut(
+      age_yrs,
+      c(0, 5, 15, Inf),
+      c("<5", "5-14", "15+"),
+      right = FALSE
+    ),
+    type_of_exit = case_when(
+      is.na(type_of_exit) ~ "Actif",
+      type_of_exit %in% c("Cured", "Died") ~ type_of_exit,
+      .default = "Other"
+    )
+  )
+
+# rows outside the table: statuses other than confirmed or non-case
+cat(
+  "Admissions before cut-off:",
+  nrow(etc_adm),
+  "\n",
+  "Kept in table:",
+  nrow(etc_conf),
+  "\n",
+  "Dropped (other status):",
+  nrow(etc_adm) - nrow(etc_conf),
+  "\n"
+)
+
+# non-cases have no exit outcome, so they are counted by age group only
+exit_counts <- etc_conf |>
+  filter(!is.na(age_group)) |>
+  mutate(
+    age_group = as.character(age_group),
+    type_of_exit = if_else(status == "non_case", "Non-case", type_of_exit)
+  ) |>
+  count(site, age_group, type_of_exit)
+
+exit_counts <- exit_counts |>
+  bind_rows(
+    exit_counts |>
+      summarise(n = sum(n), .by = c(site, type_of_exit)) |>
+      mutate(age_group = "Total")
+  ) |>
+  tidyr::complete(
+    site = site_levels,
+    age_group = age_levels,
+    type_of_exit = c("Non-case", exit_levels),
+    fill = list(n = 0)
+  ) |>
+  mutate(
+    conf_total = sum(n[type_of_exit != "Non-case"]),
+    total_adm = sum(n),
+    .by = c(site, age_group)
+  )
+
+etc_exit_df <- exit_counts |>
+  mutate(
+    cell = case_when(
+      type_of_exit == "Non-case" ~
+        sprintf("%d (%.0f)", n, if_else(total_adm > 0, 100 * n / total_adm, 0)),
+      .default = sprintf(
+        "%d (%.0f)",
+        n,
+        if_else(conf_total > 0, 100 * n / conf_total, 0)
+      )
+    )
+  ) |>
+  select(site, age_group, total_adm, type_of_exit, cell) |>
+  tidyr::pivot_wider(names_from = type_of_exit, values_from = cell) |>
+  mutate(
+    site = factor(site, site_levels),
+    age_group = factor(age_group, age_levels)
+  ) |>
+  arrange(site, age_group) |>
+  mutate(age_group = as.character(age_group), site = as.character(site)) |>
+  select(site, age_group, total_adm, `Non-case`, all_of(exit_levels))
+
+# sites absent from the note have no unknown ages
+n_unk_age <- etc_conf |> filter(is.na(age_group)) |> count(site)
+
+etc_exit_tbl <- etc_exit_df |>
+  gt::gt(groupname_col = "site") |>
+  gt::tab_header(
+    title = "Summary of Confirmed cases and non-cases treated in OCP sites",
+    subtitle = "Data up to Epi week 41"
+  ) |>
+  gt::cols_label(
+    age_group = "Age",
+    total_adm = "Admissions",
+    `Non-case` = "Non-cases (% of admissions)"
+  ) |>
+  gt::tab_spanner(
+    label = "Confirmed (% of confirmed)",
+    columns = all_of(exit_levels)
+  ) |>
+  gt::tab_style(
+    gt::cell_text(weight = "bold"),
+    list(
+      gt::cells_body(rows = age_group == "Total"),
+      gt::cells_body(columns = total_adm),
+      gt::cells_column_labels(),
+      gt::cells_row_groups()
+    )
+  ) |>
+  gt::tab_source_note("Total admissions: confirmed cases plus non-cases") |>
+  gt::tab_source_note("Other: lost to follow-up or transferred to ETC") |>
+  gt::tab_source_note(paste(
+    "Unknown age (not shown):",
+    paste(n_unk_age$site, n_unk_age$n, collapse = "; ")
+  ))
+
+etc_exit_tbl
+
+saveRDS(etc_exit_tbl, fs::path(tables_dir, "etc_exit_tbl.rds"))
+gt::gtsave(etc_exit_tbl, fs::path(tables_dir, "etc_exit_tbl.png"))
+
+#* Admissions by site, outcome and age group ------
+
+bar_levels <- c("Non-case", exit_levels)
+
+exit_pal <- c(
+  `Non-case` = "#B8E0C8",
+  Actif = "#FCD9A8",
+  Cured = "#A6CEE3",
+  Died = "#F4A9A8",
+  Other = "#D9D9D9"
+)
+
+site_totals <- exit_counts |>
+  filter(age_group == "Total") |>
+  distinct(site, total_adm)
+
+exit_bar_df <- exit_counts |>
+  filter(age_group != "Total") |>
+  left_join(
+    site_totals,
+    by = join_by(site),
+    suffix = c("_age", ""),
+    relationship = "many-to-one"
+  ) |>
+  mutate(
+    site = factor(site, rev(site_levels)),
+    type_of_exit = factor(type_of_exit, rev(bar_levels)),
+    age_group = factor(age_group, rev(age_levels[-4])),
+    lab = sprintf("%.0f%%", 100 * n / total_adm)
+  )
+
+etc_exit_bar <- ggplot(
+  exit_bar_df,
+  aes(
+    x = n,
+    y = site,
+    fill = type_of_exit,
+    alpha = age_group,
+    group = interaction(age_group, type_of_exit)
+  )
+) +
+  geom_col(
+    width = 0.7,
+    colour = "white",
+    linewidth = 0.3,
+    position = position_fill()
+  ) +
+  geom_text(
+    aes(label = lab),
+    data = \(d) filter(d, n > 0),
+    position = position_fill(vjust = 0.5),
+    size = 2.5,
+    alpha = 1
+  ) +
+  scale_fill_manual(values = exit_pal, breaks = bar_levels) +
+  scale_alpha_manual(
+    values = c(`<5` = 0.45, `5-14` = 0.7, `15+` = 1),
+    breaks = age_levels[-4]
+  ) +
+  scale_x_continuous(
+    labels = scales::label_percent(),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  guides(fill = guide_legend(order = 1, override.aes = list(alpha = 1))) +
+  labs(
+    x = "% of site admissions",
+    y = NULL,
+    fill = NULL,
+    alpha = "Age group",
+    caption = "Admissions up to 11 Oct 2026; unknown age excluded"
+  ) +
+  epithemes::epitheme_gg() +
+  theme(legend.position = "top")
+
+etc_exit_bar
+
+ggsave(
+  fs::path(plots_dir, "etc_exit_bar.png"),
+  etc_exit_bar,
+  width = 15,
+  height = 4.5,
+  dpi = 300,
+  bg = "white"
+)
+
 
 #* OCCUPATION — SYNTHÈSE (reactable) -----------------------------------
 # `dispo_*` = capacité installée ; lits confirmés = dispo_total - dispo_SP
+
 occ_all <- occ_dat |>
   # journées entièrement renseignées uniquement
   filter(if_all(

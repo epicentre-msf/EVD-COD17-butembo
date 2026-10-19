@@ -74,41 +74,45 @@ ui <- page_navbar(
       value = "surveillance",
       mod_vb_ui("vb"),
       layout_columns(
-        col_widths = c(6, 6),
-        height = "80vh",
-        min_height = 600,
-        # left: interactive cases map
-        mod_map_place_ui(id = "map"),
-        # right: time over person (stacked)
-        layout_column_wrap(
-          width = 1,
-          heights_equal = "row",
-          do.call(
-            time_ui,
-            c(
-              list(
-                id = "curve",
-                title = "Temps",
-                date_vars = date_vars,
-                group_vars = group_vars,
-                date_interval_default = "week",
-                group_var_default = "dead_upon_notif_grp",
-                ratio_line_lab = "Afficher la courbe de létalité ?"
-              ),
-              time_ui_labs
-            )
-          ),
-          person_ui(
-            id = "age_sex",
-            title = "Personne",
-            opts_btn_lab = "Options",
-            count_vars_lab = "Indicateur",
-            age_breaks_lab = "Tranches d'âge",
-            age_breaks_help = "Valeurs séparées par des virgules (p. ex. 0, 5, 18, 25, 35, 50)",
-            age_breaks_apply_lab = "Appliquer les tranches"
+        col_widths = c(4, 8),
+        height = "45vh",
+        min_height = 380,
+        mod_zs_table_ui("zs_table"),
+        do.call(
+          time_ui,
+          c(
+            list(
+              id = "curve",
+              title = "Temps",
+              date_vars = date_vars,
+              group_vars = group_vars,
+              date_interval_default = "week",
+              group_var_default = "dead_upon_notif_grp",
+              ratio_line_lab = "Afficher la courbe de létalité ?"
+            ),
+            time_ui_labs
           )
         )
       ),
+      layout_columns(
+        col_widths = c(6, 6),
+        height = "80vh",
+        min_height = 600,
+        mod_map_place_ui(id = "map"),
+        person_ui(
+          id = "age_sex",
+          title = "Personne",
+          opts_btn_lab = "Options",
+          count_vars_lab = "Indicateur",
+          age_breaks_lab = "Tranches d'âge",
+          age_breaks_help = "Valeurs séparées par des virgules (p. ex. 0, 5, 18, 25, 35, 50)",
+          age_breaks_apply_lab = "Appliquer les tranches"
+        )
+      )
+    ),
+    nav_panel(
+      title = "Délais",
+      value = "delays",
       bslib::card(
         full_screen = TRUE,
         min_height = 650,

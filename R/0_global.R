@@ -30,7 +30,10 @@ CONFIG <- list(
   ),
 
   # ISO weeks, Monday start
-  week_start = 1
+  week_start = 1,
+
+  # ETC admissions kept up to and including this ISO year-week (yyyyww)
+  etc_cut_isoweek = 202641
 )
 
 #* SHAREPOINT PATH ------------------------------
@@ -99,6 +102,30 @@ etc_ll_path_ucg <- fs::dir_ls(
 ) |>
   max()
 
+# latest compilation from Patrick
+etc_compilation_dir <- fs::path(
+  fs::path(
+    onedrive,
+    'Epi Platform-BVD – Data and Tools - Documents'
+  ),
+  "Data",
+  "data",
+  "COD"
+)
+
+# linelist
+latest_etc_compilation <- fs::dir_ls(fs::path(
+  etc_compilation_dir,
+  "linelist"
+)) |>
+  max()
+
+# Bed occupancy rate
+latest_etc_compilation_bor <- fs::dir_ls(fs::path(
+  etc_compilation_dir,
+  "linelist-bed-occupancy"
+)) |>
+  max()
 
 #* Spatial data --------------------
 butembo_project_sf_data_path <- fs::path(
@@ -110,16 +137,36 @@ butembo_project_sf_data_path <- fs::path(
 lab_dir <- fs::path(butembo_project_data_path, "brute", "labo")
 
 latest_inrb_lab_path <- fs::dir_ls(
-  fs::path(lab_dir),
+  fs::path(lab_dir, "PartageResults_INRB"),
   regex = 'Butembo_MVE17_Partage_Resultats'
 ) |>
   max()
 
-latest_mobile_lab <- fs::dir_ls(
-  lab_dir,
+# newest first, so we can fall back to an earlier export
+mobile_lab_files <- fs::dir_ls(
+  fs::path(lab_dir, "PartageResults_Mobile"),
   regex = "MVE_17_LABO_MOBILE_BUTEMBO"
 ) |>
-  max()
+  sort(decreasing = TRUE)
+
+# latest exports sometimes drop the result column
+mobile_result_col <- "kit_danalyse_altona_filoscreen_1_0_resultats_pos_neg"
+
+has_mobile_result_col <- function(path) {
+  mobile_result_col %in%
+    names(janitor::clean_names(rio::import(path, n_max = 0)))
+}
+
+latest_mobile_lab <- Find(has_mobile_result_col, mobile_lab_files)
+stopifnot(
+  "no mobile lab export has the result column" = !is.null(latest_mobile_lab)
+)
+
+if (latest_mobile_lab != mobile_lab_files[[1]]) {
+  cli::cli_alert_warning(
+    "{fs::path_file(mobile_lab_files[[1]])} lacks the result column; using {fs::path_file(latest_mobile_lab)}"
+  )
+}
 
 #* ENSEMBLE LINELIST ----------------
 narr_ll_dir <- fs::path(

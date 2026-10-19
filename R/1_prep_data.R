@@ -196,50 +196,32 @@ ll_narr_clean <- ll_narr |>
     ),
 
     # ! Isolated in an ETC ?
-    # both sites took ordinary patients before these dates
-    isolated_etc = case_when(
-      isolation_site_name == "HGR Katwa" &
-        date_admission_eff >= as.Date("2026-06-15") &
-        # unknown counts as alive at notification, so the cohort keeps them
-        !dead_upon_notif %in% TRUE ~ TRUE,
-      # an MSF id also marks a Kitatumba admission, whatever the date
-      isolation_site_name %in%
-        c("HGR Kitatumba", "CTE Kitatumba") &
-        (date_admission_eff >= as.Date("2026-07-01") | !is.na(id_msf)) &
-        !dead_upon_notif %in% TRUE ~ TRUE,
-      .default = FALSE
-    ),
+    # taken from the export field; a blank counts as not isolated
+    isolated_etc = isolated %in% "Yes",
 
     # ! Which ETC ?
-    etc_site = case_when(
-      isolated_etc & isolation_site_name == "HGR Katwa" ~ "CTE Katwa (MEDAIR)",
-      isolated_etc &
-        isolation_site_name %in% c("HGR Kitatumba", "CTE Kitatumba") ~
-        "CTE Kitatumba (MSF)"
-    ),
+    # isolation_site_name is the part of isolation_site_id before the first "|"
+    etc_site = if_else(isolated_etc, isolation_site_name, NA_character_),
 
     # ! Where was death ?
-    # the field mixes a place with a legacy yes/no: "Yes" is taken at its
-    # word, "No" only says it was not community, so the ETC record decides
     death_place = case_when(
       outcome != "Died" ~ NA_character_,
-      community_death %in% c("CTE/CT", "CTE", "CT") ~ "CTE/CT",
+      community_death == "CTE/CT" ~ "CTE/CT",
       community_death %in% c("ESS", "Communauté") ~ "Community",
-      community_death == "Yes" ~ "Community",
-      community_death == "No" & isolated_etc ~ "CTE/CT",
-      community_death == "No" ~ "Community",
       .default = NA_character_
     ),
     death_place = factor(death_place, levels = c("CTE/CT", "Community")),
 
     # ! Dead outside isolation ?
-    # a place other than CTE/CT counts only when the patient arrived dead
+    # a recorded CTE/CT death stays inside isolation, even if flagged dead on arrival
     dead_out_isolation = case_when(
       # NA is kept for deaths with no data
       outcome != "Died" ~ "Not applicable",
-      community_death %in% c("CTE/CT", "CTE", "CT") ~ "No",
+      community_death == "CTE/CT" ~ "No",
       dead_upon_arrival %in% "Yes" ~ "Yes",
-      community_death %in% c("ESS", "Communité") ~ "Yes",
+      community_death %in% c("ESS", "Communauté") ~ "Yes",
+      # last, so it only fills deaths with no place recorded
+      isolated %in% "No" ~ "Yes",
       .default = NA_character_
     ),
     dead_out_isolation = factor(
@@ -305,6 +287,43 @@ ll_narr_clean <- ll_narr |>
     select(adm2_nosf, adm2_name, adm2_pcode__comptabilisation = adm2_pcode),
     join_by(adm2_comptabilisation == adm2_name),
     relationship = "many-to-one"
+  ) |>
+
+  # after the joins, whose keys must keep their NA. Every grouping column
+  # reads "Unknown" when empty, which the dashboard draws in light grey
+  mutate(
+    across(c(adm2_comptabilisation, isolated), \(x) replace_na(x, "Unknown")),
+    across(
+      c(age_group, sex, type_of_exit, dead_out_isolation),
+      \(x) forcats::fct_na_value_to_level(x, "Unknown")
+    ),
+    # labelled copy for grouping; mod_vb needs dead_upon_notif to stay logical
+    dead_upon_notif_grp = factor(
+      case_match(
+        dead_upon_notif,
+        TRUE ~ "Dead on notification",
+        FALSE ~ "Alive on notification",
+        .default = "Unknown"
+      ),
+      levels = c("Dead on notification", "Alive on notification", "Unknown")
+    ),
+    transmission_type_1 = factor(
+      case_match(
+        transmission_type_1,
+        c(NA, "Inconnu") ~ "Unknown",
+        .default = transmission_type_1
+      ),
+      levels = c(
+        "Familiale",
+        "Funérailles",
+        "Nosocomiale",
+        "Sanguin directe",
+        "Soins au malade",
+        "Visite occasionnelle",
+        "Autre",
+        "Unknown"
+      )
+    )
   ) |>
 
   rename(pid = patient_site_id) |>
@@ -614,7 +633,8 @@ if (PREP_LAB_DATA) {
 
   lab_inrb_clean <- lab_inrb |>
     transmute(
-      new_sample = nouveau_prelevement_ou_reprelevement ==
+      lab_id = id_labo_numero_de_l_echantillon,
+      first_sample = nouveau_prelevement_ou_reprelevement ==
         "Nouveau Prélèvement",
       date_notification = ymd(date_de_notification_dd_mm_yyy),
       patient_status = statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
@@ -638,16 +658,18 @@ if (PREP_LAB_DATA) {
         NA ~ NA_character_
       ),
       source = "INRB Béni"
-    )
+    ) |>
+    distinct(lab_id, lab_result, .keep_all = TRUE)
 
   lab_mobile <- rio::import(latest_mobile_lab) |>
     as_tibble() |>
-    clean_names() |>
-    remove_empty()
+    janitor::clean_names() |>
+    janitor::remove_empty()
 
   lab_mobile_clean <- lab_mobile |>
     transmute(
-      new_sample = nouveau_prelevement_ou_reprelevement ==
+      lab_id = id_labo_numero_de_l_echantillon,
+      first_sample = nouveau_prelevement_ou_reprelevement ==
         "Nouveau Prélèvement",
       patient_status = recode_values(
         statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
@@ -684,11 +706,31 @@ if (PREP_LAB_DATA) {
         .default = NA_character_
       ),
       source = "Laboratoire Mobile"
-    )
+    ) |>
+    distinct(lab_id, lab_result, .keep_all = TRUE)
 
-  lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean) |>
+  lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean)
+
+  # a future result date is a typo and would anchor the dashboard's latest-result and period filters
+  n_future <- sum(lab_data$date_lab_result > Sys.Date(), na.rm = TRUE)
+  lab_data$date_lab_result[
+    lab_data$date_lab_result > Sys.Date() & !is.na(lab_data$date_lab_result)
+  ] <- NA
+  cli::cli_alert_info("date_lab_result: {n_future} future dates set to NA")
+
+  lab_data <- lab_data |>
     mutate(
-      lab_result = factor(lab_result, levels = c("Négatif", "Positif")),
+      # "Unknown" stays out of positivity, which tests %in% Positif/Négatif
+      lab_result = factor(
+        replace_na(lab_result, "Unknown"),
+        levels = c("Négatif", "Positif", "Unknown")
+      ),
+      sample_type = replace_na(sample_type, "Unknown"),
+      source = replace_na(source, "Unknown"),
+      first_sample = factor(
+        case_match(first_sample, TRUE ~ "Oui", FALSE ~ "Non", NA ~ "Unknown"),
+        levels = c("Oui", "Non", "Unknown")
+      ),
       delay_sampling_result_days = as.numeric(date_lab_result - date_sampling),
       delay_notif_result_days = as.numeric(date_lab_result - date_notification)
     )
@@ -836,33 +878,7 @@ delay_dates <- c(
 #* Save to server ------------------------------------------------------
 # app_data.rds feeds the evd-2026-app dashboard on episerv
 app_data <- list(
-  linelist = add_delay_pairs(ll_narr_clean, delay_dates) |>
-    # after build_quality(), so the quality tab still counts these as missing
-    mutate(
-      # labelled copy for grouping; mod_vb needs dead_upon_notif to stay logical
-      dead_upon_notif_grp = factor(
-        dead_upon_notif,
-        levels = c(TRUE, FALSE),
-        labels = c("Dead on notification", "Alive on notification")
-      ),
-      transmission_type_1 = factor(
-        case_match(
-          transmission_type_1,
-          c(NA, "Inconnu") ~ "Unknown",
-          .default = transmission_type_1
-        ),
-        levels = c(
-          "Familiale",
-          "Funérailles",
-          "Nosocomiale",
-          "Sanguin directe",
-          "Soins au malade",
-          "Visite occasionnelle",
-          "Autre",
-          "Unknown"
-        )
-      )
-    ),
+  linelist = add_delay_pairs(ll_narr_clean, delay_dates),
   quality = quality,
   hf_visits = hf_visits,
   hf_cases = hf_cases,

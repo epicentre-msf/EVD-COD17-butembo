@@ -4,9 +4,17 @@
 mod_vb_ui <- function(id) {
   ns <- NS(id)
   bslib::layout_columns(
-    col_widths = c(3, 3, 3, 3),
+    col_widths = c(2, 2, 2, 2, 4),
     fill = FALSE,
     class = "pt-2 hgap-tight",
+    value_box(
+      title = "Semaine épidémiologique",
+      value = textOutput(ns("epiweek"), inline = TRUE),
+      p(uiOutput(ns("epiweek_info"), inline = TRUE)),
+      showcase_layout = "left center",
+      class = "vb-accent vb-epiweek",
+      height = "85px"
+    ),
     value_box(
       title = "Cas confirmés",
       value = textOutput(ns("confirmed"), inline = TRUE),
@@ -80,6 +88,8 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
 
       n_msf <- sum(!is.na(conf$id_msf))
 
+      n_isolated <- sum(conf$isolated %in% "Yes")
+
       n_died <- sum(conf$type_of_exit == "Died", na.rm = TRUE)
       n_recovered <- sum(conf$type_of_exit == "Recovered", na.rm = TRUE)
 
@@ -115,10 +125,39 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
         n_confirmed = n_confirmed,
         n_alive_notif = n_alive_notif,
         n_msf = n_msf,
+        n_isolated = n_isolated,
         n_died = n_died,
         n_recovered = n_recovered,
         n_nonisolated_deaths = n_nonisolated_deaths
       )
+    })
+
+    # calendar fact, so deliberately blind to the sidebar filters
+    wk_start <- lubridate::floor_date(Sys.Date(), "week", week_start = 1)
+    output$epiweek <- renderText(paste0(
+      "S",
+      as.integer(format(wk_start, "%V"))
+    ))
+    output$epiweek_info <- renderUI({
+      mois <- c(
+        "janv.",
+        "févr.",
+        "mars",
+        "avr.",
+        "mai",
+        "juin",
+        "juil.",
+        "août",
+        "sept.",
+        "oct.",
+        "nov.",
+        "déc."
+      )
+      wk_end <- wk_start + 6
+      fmt <- \(d) {
+        paste(as.integer(format(d, "%d")), mois[as.integer(format(d, "%m"))])
+      }
+      paste0(format(wk_start, "%G"), " · ", fmt(wk_start), " – ", fmt(wk_end))
     })
 
     output$confirmed <- renderText(scales::number(df_summary()$n_confirmed))
@@ -127,18 +166,27 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Patients confirmés MSF",
+          label = "Patients MSF",
           value = paste0(
             scales::number(s$n_msf),
             " (",
             vb_pct(s$n_msf, s$n_confirmed),
             ")"
           )
+        ),
+        list(
+          label = "Isolés",
+          value = paste0(
+            scales::number(s$n_isolated),
+            " (",
+            vb_pct(s$n_isolated, s$n_confirmed),
+            ")"
+          )
         )
       ))
     })
 
-    output$alive_notif <- renderText({
+    output$alive_notif <-renderText({
       s <- df_summary()
       paste0(
         scales::number(s$n_alive_notif),
@@ -152,7 +200,7 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Patients confirmés MSF",
+          label = "Patients MSF",
           value = paste0(
             scales::number(s$n_msf),
             " (",
