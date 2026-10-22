@@ -337,6 +337,97 @@ cli::cli_alert_info(
   "{nrow(ll_narr_clean)} cases kept of {n_import}: \\
    {n_import - nrow(ll_narr_clean)} outside {toString(CONFIG$filter_hz)}"
 )
+
+#* Transmission pairs ---------------------------------------------
+transmission_data <- rio::import(fs::path(
+  transmission_dir,
+  "butembo_transmission_pairs.xlsx"
+)) |>
+  as_tibble() |>
+  mutate(
+    across(c(start_exposure, end_exposure), harmonize_dates),
+    # match the type of pid, whichever way the export stored it
+    id_infectee = if (is.character(ll_narr_clean$pid)) {
+      as.character(id_infectee)
+    } else {
+      as.numeric(id_infectee)
+    },
+    only_exposure = tolower(as.character(only_exposure)) %in%
+      c("yes", "oui", "true", "1"),
+    most_probable = tolower(as.character(most_probable)) %in%
+      c("yes", "oui", "true", "1")
+  ) |>
+  filter(!is.na(id_infectee))
+
+# one pair per infectee: the most probable when several are listed
+n_pairs <- nrow(transmission_data)
+transmission_one <- transmission_data |>
+  arrange(id_infectee, desc(most_probable)) |>
+  slice(1, .by = id_infectee)
+cli::cli_alert_info(
+  "{n_pairs - nrow(transmission_one)} of {n_pairs} transmission pairs dropped: \\
+   not the most probable for their infectee"
+)
+n_tie <- transmission_data |>
+  filter(most_probable) |>
+  count(id_infectee) |>
+  filter(n > 1) |>
+  nrow()
+if (n_tie > 0) {
+  cli::cli_alert_warning(
+    "{n_tie} infectees have several most_probable pairs: first row kept"
+  )
+}
+
+n_before <- nrow(ll_narr_clean)
+ll_narr_clean <- ll_narr_clean |>
+  left_join(
+    transmission_one |>
+      select(
+        id_infectee,
+        only_exposure,
+        tr_infector_id = id_infector,
+        tr_infector_name = name_infector,
+        tr_start = start_exposure,
+        tr_end = end_exposure
+      ),
+    by = join_by(pid == id_infectee),
+    relationship = "many-to-one"
+  ) |>
+  mutate(
+    # only_exposure pairs bring dates, not an infector
+    tr_infector_id = if_else(
+      !is.na(only_exposure) & only_exposure,
+      NA,
+      as.character(tr_infector_id)
+    ),
+    tr_infector_name = if_else(
+      !is.na(only_exposure) & only_exposure,
+      NA_character_,
+      as.character(tr_infector_name)
+    ),
+    infector_ID_1 = dplyr::coalesce(
+      tr_infector_id,
+      as.character(infector_ID_1)
+    ),
+    infector_name_1 = dplyr::coalesce(tr_infector_name, infector_name_1),
+    start_exposure_date_1 = dplyr::coalesce(tr_start, start_exposure_date_1),
+    end_exposure_date_1 = dplyr::coalesce(tr_end, end_exposure_date_1)
+  ) |>
+  select(-c(only_exposure, starts_with("tr_"))) |>
+  mutate(
+    # factor, not logical, so the dashboard can group by it
+    infector_identified = factor(
+      if_else(is.na(infector_name_1), "No", "Yes"),
+      levels = c("Yes", "No")
+    )
+  )
+stopifnot("transmission join changed N" = nrow(ll_narr_clean) == n_before)
+cli::cli_alert_info(
+  "{n_before} -> {nrow(ll_narr_clean)} rows; {sum(transmission_one$id_infectee %in% ll_narr_clean$pid)} \\
+   of {nrow(transmission_one)} infectees matched a pid, \\
+   {sum(ll_narr_clean$infector_identified == 'Yes')} cases with an infector"
+)
 # adm3_name__res unmatched against the geobase: no pcode, so no map join
 n_res_unmatched <- with(
   ll_narr_clean,
@@ -759,9 +850,11 @@ if (PREP_LAB_DATA) {
   )
 }
 
+
 #* Prepare dashboard data -------------------------------------------
 
 # all pcodes needed for the data
+
 adm1_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm1_pcode__onset,
   ll_narr_clean$adm1_pcode__notif,

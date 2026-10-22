@@ -111,16 +111,6 @@ ui <- page_navbar(
       )
     ),
     nav_panel(
-      title = "Délais",
-      value = "delays",
-      bslib::card(
-        full_screen = TRUE,
-        min_height = 650,
-        bslib::card_header("Délais entre événements clés"),
-        mod_delay_ui("delay")
-      )
-    ),
-    nav_panel(
       title = "Courbes épidémiques stratifiées",
       value = "epicurve_hz",
       mod_epicurve_hz_ui("epicurve_hz", group_vars = group_vars)
@@ -130,6 +120,24 @@ ui <- page_navbar(
       value = "facilities",
       mod_facilities_ui("facilities")
     )
+  ),
+
+  nav_panel(
+    title = "Délais",
+    value = "delays",
+    bslib::card(
+      full_screen = TRUE,
+      height = "80vh",
+      min_height = 600,
+      bslib::card_header("Délais entre événements clés"),
+      mod_delay_ui("delay")
+    )
+  ),
+
+  nav_panel(
+    title = "Répartition",
+    value = "breakdown",
+    mod_breakdown_ui("breakdown")
   ),
 
   mod_lab_ui("lab"),

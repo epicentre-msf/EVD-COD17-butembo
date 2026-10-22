@@ -4,8 +4,36 @@
   var naCol = "#bdbdbd";
   // any no-value series name, whatever the grouping variable spells it
   var naRe = /^\(?\s*(unknown|inconnu|missing|manquant|not applicable|non applicable|n\/a|na)\s*\)?$/i;
+  // epishiny's shared tooltip has no total and shows a raw date for weekly bars
+  function patchTooltip(chart) {
+    if (chart._tipPatched) return;
+    chart._tipPatched = true;
+    chart.update({
+      tooltip: {
+        shared: true,
+        formatter: function () {
+          var iv = Shiny.shinyapp && Shiny.shinyapp.$inputValues["curve-date_interval"];
+          var head = String(iv).toLowerCase() === "week"
+            ? "S" + new Date(this.x).getWeek()
+            : Highcharts.dateFormat("%e %b %Y", this.x);
+          var total = 0;
+          var rows = this.points.map(function (p) {
+            total += p.y;
+            var pct = p.percentage !== undefined && this.points.length > 1
+              ? " (" + Highcharts.numberFormat(p.percentage, 1) + "%)"
+              : "";
+            return '<span style="color:' + p.color + '">●</span> ' + p.series.name +
+              ": <b>" + p.y + pct + "</b><br/>";
+          }, this);
+          return "<b>" + head + "</b><br/>" + rows.join("") +
+            "<b>Total : " + Highcharts.numberFormat(total, 0) + "</b>";
+        }
+      }
+    }, false);
+  }
   // only touches series whose colour differs, so the render hook below cannot loop
   function paint(chart) {
+    patchTooltip(chart);
     var changed = false;
     chart.series.forEach(function (s) {
       var name = String(s.name).trim();
@@ -15,7 +43,29 @@
         changed = true;
       }
     });
+    if (fadeLatestWeek(chart)) changed = true;
     if (changed) chart.redraw();
+  }
+  // the latest data week is still filling; key off the data, as Sys.Date() lags it
+  function fadeLatestWeek(chart) {
+    var maxX = -Infinity;
+    chart.series.forEach(function (s) {
+      s.points.forEach(function (p) { if (p.x > maxX) maxX = p.x; });
+    });
+    if (!isFinite(maxX)) return false;
+    var dow = (new Date(maxX).getUTCDay() + 6) % 7;
+    var weekStart = maxX - dow * 864e5;
+    var changed = false;
+    chart.series.forEach(function (s) {
+      var faded = Highcharts.color(s.color).setOpacity(0.35).get("rgba");
+      s.points.forEach(function (p) {
+        if (p.x >= weekStart && p.color !== faded) {
+          p.update({ color: faded }, false);
+          changed = true;
+        }
+      });
+    });
+    return changed;
   }
   function apply(id, tries) {
     hook();

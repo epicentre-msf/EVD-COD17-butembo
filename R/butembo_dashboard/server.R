@@ -141,6 +141,15 @@ server <- function(input, output, session) {
     group_vars = group_vars
   )
 
+  mod_breakdown_server(
+    "breakdown",
+    df = df_period,
+    group_vars = group_vars,
+    time_filter = bar_click,
+    place_filter = map_click,
+    filter_info = filter_data$filter_info
+  )
+
   mod_facilities_server(
     "facilities",
     df = df_period,

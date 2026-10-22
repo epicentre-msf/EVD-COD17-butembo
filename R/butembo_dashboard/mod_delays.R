@@ -125,6 +125,8 @@ mod_delay_ui <- function(
     )
   )
 
+  tagList(
+  uiOutput(ns("delay_boxes")),
   bslib::navset_card_tab(
     wrapper = function(...) {
       bslib::card_body(..., padding = 0, class = "delay-container")
@@ -141,6 +143,12 @@ mod_delay_ui <- function(
     ),
 
     bslib::nav_panel(
+      title = tags$span(bsicons::bs_icon("graph-up"), "Tendance"),
+      value = "trend_nav",
+      highcharter::highchartOutput(ns("delay_trend"), height = "100%")
+    ),
+
+    bslib::nav_panel(
       title = tags$span(bsicons::bs_icon("bar-chart-fill"), "Distribution"),
       value = "bar_nav",
       highcharter::highchartOutput(ns("delay_barchart"), height = "100%")
@@ -150,13 +158,8 @@ mod_delay_ui <- function(
       title = tags$span(bsicons::bs_icon("calendar-week-fill"), "Chronologie"),
       value = "timeline_nav",
       highcharter::highchartOutput(ns("delay_timeline"))
-    ),
-
-    bslib::nav_panel(
-      title = tags$span(bsicons::bs_icon("graph-up"), "Tendance"),
-      value = "trend_nav",
-      highcharter::highchartOutput(ns("delay_trend"))
     )
+  )
   )
 }
 
@@ -233,7 +236,7 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
       # every pair is selectable; only these two start displayed
       trend_default <- c(
         "date_symptom_onset__date_notification",
-        "date_notification__date_admission_eff"
+        "date_symptom_onset__date_admission_eff"
       )
 
       observeEvent(delay_choices, {
@@ -257,6 +260,10 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
 
       group_var <- reactive({
         if (input$group_var == "none") NULL else input$group_var
+      })
+
+      output$delay_boxes <- renderUI({
+        delay_value_boxes(delay_box_stats(df(), co_value = input$co_value))
       })
 
       # calculate delays
@@ -332,6 +339,80 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
   )
 }
 
+# Mean of the key delays: last `window` days of the data, and all cases.
+# Window ends at the latest date of each delay's later event, so it never empties.
+delay_box_stats <- function(df, co_value = 30, window = 14) {
+  d <- df |>
+    dplyr::mutate(
+      dplyr::across(
+        c(date_symptom_onset, date_notification, date_admission_eff, date_exit_eff),
+        as.Date
+      ),
+      exit_date_died = dplyr::if_else(
+        type_of_exit %in% "Died", date_exit_eff, as.Date(NA)
+      ),
+      exit_date_recovered = dplyr::if_else(
+        type_of_exit %in% "Recovered", date_exit_eff, as.Date(NA)
+      )
+    )
+
+  defs <- tibble::tribble(
+    ~label, ~end,
+    "Début des symptômes à notification", "date_notification",
+    "Début des symptômes à isolement", "date_admission_eff",
+    "Début des symptômes à décès", "exit_date_died",
+    "Début des symptômes à guérison", "exit_date_recovered"
+  )
+
+  purrr::map2(defs$label, defs$end, \(label, end) {
+    delay <- as.numeric(d[[end]] - d$date_symptom_onset)
+    # negative or implausibly long delays are data errors, as in the charts
+    ok <- !is.na(delay) & delay >= 0 & delay <= co_value
+    recent <- ok & d[[end]] > max(d[[end]], na.rm = TRUE) - window
+    tibble::tibble(
+      label = label,
+      mean_recent = mean(delay[recent]),
+      n_recent = sum(recent),
+      mean_total = mean(delay[ok]),
+      n_total = sum(ok)
+    )
+  }) |>
+    dplyr::bind_rows()
+}
+
+# Same box style as mod_vb.R: accent stripe, stat line under the value.
+delay_value_boxes <- function(stats) {
+  fmt <- \(x) if (is.finite(x)) sprintf("%.1f j", x) else "NA"
+  accents <- c("vb-epiweek", "vb-msf", "vb-deaths", "vb-alive")
+  boxes <- purrr::pmap(
+    c(stats, list(accent = accents)),
+    \(label, mean_recent, n_recent, mean_total, n_total, accent) {
+      bslib::value_box(
+        title = htmltools::tagList(
+          label,
+          htmltools::tags$div(
+            htmltools::tags$small("(derniers 14j)")
+          )
+        ),
+        value = paste0(fmt(mean_recent), " (n = ", n_recent, ")"),
+        p(vb_stat_line(list(
+          list(label = "Total", value = paste0(fmt(mean_total), " (n = ", n_total, ")"))
+        ))),
+        showcase_layout = "left center",
+        class = paste("vb-accent", accent),
+        # grows with the title when it wraps, so the value never overlaps it
+        min_height = "130px"
+      )
+    }
+  )
+  bslib::layout_columns(
+    col_widths = c(3, 3, 3, 3),
+    fill = FALSE,
+    class = "pt-2 hgap-tight",
+    !!!boxes
+  )
+}
+
 #' Plot mean delays over time
 #'
 #' One line per delay: mean delay (days) by week or month of symptom onset.
@@ -343,6 +424,7 @@ mod_delay_server <- function(id, df, date_vars, group_vars) {
 #' @param delay_choices Named vector mapping delay columns to display labels.
 #' @param agg Either "week" (ISO, Monday start) or "month".
 #' @param co_value Maximum valid delay in days.
+#' @param ref_days Mean transmission time (days), drawn as a reference line.
 #'
 #' @return A highchart object.
 #' @export
@@ -351,7 +433,8 @@ plot_delay_trend <- function(
   delays,
   delay_choices,
   agg = c("week", "month"),
-  co_value = 30
+  co_value = 30,
+  ref_days = 6
 ) {
   agg <- match.arg(agg)
 
@@ -389,7 +472,8 @@ plot_delay_trend <- function(
   # fixed per delay, so a colour keeps its meaning when the selection changes
   trend_pal <- c(
     date_symptom_onset__date_notification = "#4E79A7",
-    date_notification__date_admission_eff = "#F28E2B",
+    date_symptom_onset__date_admission_eff = "#F28E2B",
+    date_notification__date_admission_eff = "#E15759",
     date_admission_eff__date_exit_eff = "#59A14F",
     date_symptom_onset__date_exit_eff = "#B07AA1"
   )
@@ -402,7 +486,24 @@ plot_delay_trend <- function(
     highcharter::hc_xAxis(type = "datetime", title = list(text = NULL)) |>
     highcharter::hc_yAxis(
       title = list(text = "Délai moyen (jours)"),
-      min = 0
+      min = 0,
+      # keeps the reference line in view when all delays are shorter
+      softMax = ref_days + 1,
+      plotLines = list(list(
+        value = ref_days,
+        color = grDevices::adjustcolor("darkred", alpha.f = 0.35),
+        width = 2,
+        # below the series (zIndex 3), so the data stays readable
+        zIndex = 1,
+        label = list(
+          text = paste0("Temps moyen de transmission : ", ref_days, " jours"),
+          align = "left",
+          style = list(
+            color = grDevices::adjustcolor("darkred", alpha.f = 0.6),
+            fontWeight = "bold"
+          )
+        )
+      ))
     ) |>
     highcharter::hc_legend(enabled = TRUE) |>
     highcharter::hc_exporting(enabled = FALSE) |>

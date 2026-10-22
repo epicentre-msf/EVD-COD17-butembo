@@ -191,7 +191,8 @@ group_vars <- c(
   "Type de transmission" = "transmission_type_1",
   "Décédé à la notification" = "dead_upon_notif_grp",
   "Issue" = "type_of_exit",
-  "Infection locale" = "infection_butembo"
+  "Infection locale" = "infection_butembo",
+  "Infector identifié" = "infector_identified"
 )
 
 # an "Unknown" level would take a positional epicurve colour; as NA, epishiny
@@ -271,11 +272,14 @@ source("mod_facilities.R")
 # confirmed cases by health zone
 source("mod_zs_table.R")
 
+# breakdown of cases by categorical variable
+source("mod_breakdown.R")
+
 # chronological order, as the delay module subtracts earlier from later
 delay_date_vars <- c(
   "Date de début des symptômes" = "date_symptom_onset",
   "Date de notification" = "date_notification",
-  "Date d'admission" = "date_admission_eff",
+  "Date d'isolement" = "date_admission_eff",
   "Date de confirmation labo" = "date_lab_result_1",
   "Date de sortie" = "date_exit_eff"
 )
@@ -359,6 +363,7 @@ group_pals <- list(
     "Imported" = "#e09f3e",
     "Unknown" = na_col
   ),
+  infector_identified = c("Yes" = "#2a6f97", "No" = "#9e2a2b"),
   lab_result = c("Négatif" = "#3a9d8f", "Positif" = "#8b0000"),
   source = c("INRB Béni" = "#2a6f97", "Laboratoire Mobile" = "#e9a03b"),
   first_sample = c(
