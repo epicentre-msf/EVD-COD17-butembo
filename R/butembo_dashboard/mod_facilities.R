@@ -22,7 +22,25 @@ hc_count_bars <- function(x, title, x_lab) {
       align = "left",
       style = list(fontSize = "13px", fontWeight = "bold")
     ) |>
-    highcharter::hc_xAxis(categories = lvls, title = list(text = x_lab)) |>
+    highcharter::hc_xAxis(
+      categories = lvls,
+      title = list(text = x_lab),
+      plotLines = list(
+        list(
+          value = mean(x),
+          color = "#d7301f",
+          width = 2,
+          zIndex = 5
+        ),
+        list(
+          value = stats::median(x),
+          color = "#d7301f",
+          width = 2,
+          dashStyle = "Dash",
+          zIndex = 5
+        )
+      )
+    ) |>
     highcharter::hc_yAxis(
       title = list(text = "Effectif"),
       allowDecimals = FALSE
@@ -62,7 +80,12 @@ mod_facilities_ui <- function(id) {
       bslib::nav_panel(
         "Carte",
         shiny::uiOutput(ns("map_disclaimer")),
-        mapgl::maplibreOutput(ns("map"), height = "100%")
+        bslib::layout_columns(
+          col_widths = 12,
+          row_heights = c(3, 1),
+          mapgl::maplibreOutput(ns("map"), height = "100%"),
+          reactable::reactableOutput(ns("unmapped_tbl"))
+        )
       ),
       bslib::nav_panel(
         "Tableau",
@@ -105,7 +128,7 @@ mod_facilities_server <- function(
   id,
   df,
   hf_visits,
-  hf_cases,
+  hf_geo,
   flow_locations,
   flow_edges,
   adm2,
@@ -143,7 +166,7 @@ mod_facilities_server <- function(
       a <- anchor()
       visits_f() |>
         dplyr::summarise(
-          .by = c(raw_name, hf_name, hf_as, hf_zs),
+          .by = c(hf_pcode, hf_name, hf_as, hf_zs),
           total = dplyr::n_distinct(unique_id),
           j7 = n_seen(unique_id, date_start_HF_visited, a, 7),
           j14 = n_seen(unique_id, date_start_HF_visited, a, 14),
@@ -158,8 +181,7 @@ mod_facilities_server <- function(
     })
 
     output$top_tbl <- reactable::renderReactable({
-      # raw_name is only the map's join key
-      d <- dplyr::select(top(), -raw_name)
+      d <- dplyr::select(top(), -hf_pcode)
       shiny::validate(shiny::need(nrow(d) > 0, "Aucune structure visitée."))
 
       domain <- c(0, max(d$j21))
@@ -236,14 +258,10 @@ mod_facilities_server <- function(
     map_points <- shiny::reactive({
       d <- top()
       n_top <- nrow(d)
-      # only structures with coordinates in prep can be drawn
-      xy <- hf_cases |>
-        dplyr::filter(!is.na(lon)) |>
-        dplyr::select(raw_name, lon, lat)
       d <- dplyr::inner_join(
         d,
-        xy,
-        by = dplyr::join_by(raw_name),
+        hf_geo,
+        by = dplyr::join_by(hf_pcode),
         relationship = "many-to-one"
       )
       stopifnot(nrow(d) <= n_top)
@@ -269,6 +287,40 @@ mod_facilities_server <- function(
             j21
           )
         )
+    })
+
+    output$unmapped_tbl <- reactable::renderReactable({
+      d <- top() |>
+        dplyr::anti_join(hf_geo, by = dplyr::join_by(hf_pcode)) |>
+        dplyr::select(hf_name, hf_as, hf_zs, total, j7, j14, j21)
+      shiny::validate(shiny::need(
+        nrow(d) > 0,
+        "Toutes les structures sont localisées."
+      ))
+      reactable::reactable(
+        d,
+        compact = TRUE,
+        pagination = FALSE,
+        height = 180,
+        theme = reactable::reactableTheme(
+          style = list(fontSize = "0.78rem"),
+          cellPadding = "3px 6px"
+        ),
+        defaultColDef = reactable::colDef(align = "center", minWidth = 50),
+        columns = list(
+          hf_name = reactable::colDef(
+            name = "Non localisée",
+            align = "left",
+            minWidth = 150
+          ),
+          hf_as = reactable::colDef(name = "Aire de santé", align = "left"),
+          hf_zs = reactable::colDef(name = "Zone de santé", align = "left"),
+          total = reactable::colDef(name = "Total", style = list(fontWeight = 600)),
+          j7 = reactable::colDef(name = "7 j"),
+          j14 = reactable::colDef(name = "14 j"),
+          j21 = reactable::colDef(name = "21 j")
+        )
+      )
     })
 
     output$map <- mapgl::renderMaplibre({

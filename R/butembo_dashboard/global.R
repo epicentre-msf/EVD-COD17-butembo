@@ -72,29 +72,98 @@ hf_visits <- app_data$hf_visits
 
 # one row per sample tested, for the Lab data tab
 lab_data <- app_data$lab_data
-# cases per located site, and flows between sites
-hf_cases <- app_data$hf_cases
-hf_flows <- app_data$hf_flows
 
-# add_flowmap() wants id/lat/lon nodes and origin/dest/count edges
+hf_geo <- app_data$hf_gis |>
+  dplyr::mutate(
+    lon = sf::st_coordinates(geometry)[, 1],
+    lat = sf::st_coordinates(geometry)[, 2]
+  ) |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(!is.na(pcode)) |>
+  dplyr::select(hf_pcode = pcode, lon, lat)
+stopifnot(!anyDuplicated(hf_geo$hf_pcode))
+
+hf_named <- dplyr::filter(hf_visits, !is.na(raw_name))
+
+hf_cases <- hf_named |>
+  dplyr::summarise(
+    .by = c(raw_name, hf_pcode, hf_name, hf_as, hf_zs),
+    n_visits = dplyr::n(),
+    n_cases = dplyr::n_distinct(unique_id)
+  ) |>
+  dplyr::left_join(
+    hf_geo,
+    by = dplyr::join_by(hf_pcode),
+    relationship = "many-to-one"
+  ) |>
+  dplyr::mutate(
+    precision = factor(
+      dplyr::case_when(
+        !is.na(lon) ~ "Health facility",
+        !is.na(hf_as) & hf_as != "AS non définie" ~ "Health area",
+        !is.na(hf_zs) ~ "Health zone",
+        .default = "Not located"
+      ),
+      levels = c(
+        "Health facility",
+        "Health area",
+        "Health zone",
+        "Not located"
+      )
+    )
+  )
+
+hf_flows <- hf_named |>
+  dplyr::arrange(unique_id, date_start_HF_visited, visit) |>
+  dplyr::mutate(from = hf_pcode, to = dplyr::lead(hf_pcode), .by = unique_id) |>
+  dplyr::filter(!is.na(from), !is.na(to), from != to) |>
+  dplyr::summarise(.by = c(from, to), n_cases = dplyr::n_distinct(unique_id))
+
 flow_locations <- hf_cases |>
-  dplyr::filter(!is.na(lon), !is.na(lat)) |>
-  dplyr::transmute(id = raw_name, name = hf_name, lon, lat)
-stopifnot(!anyDuplicated(flow_locations$id))
+  dplyr::filter(!is.na(lon)) |>
+  dplyr::distinct(hf_pcode, .keep_all = TRUE) |>
+  dplyr::transmute(id = hf_pcode, name = hf_name, lon, lat)
 
 flow_edges <- hf_flows |>
   dplyr::transmute(origin = from, dest = to, count = n_cases) |>
   dplyr::filter(origin %in% flow_locations$id, dest %in% flow_locations$id)
-message(
-  "flowmap: kept ",
-  nrow(flow_edges),
-  " of ",
-  nrow(hf_flows),
-  " flows (an end without coordinates)"
-)
 
-# completeness and geo-match tables, built in prep for the Data quality tab
 quality <- app_data$quality
+
+quality$hf_unmatched <- hf_cases |>
+  dplyr::filter(is.na(lon)) |>
+  dplyr::transmute(
+    Structure = hf_name,
+    `Health area` = hf_as,
+    `Health zone` = hf_zs,
+    Precision = precision,
+    Reason = dplyr::if_else(
+      is.na(hf_pcode),
+      "No pcode in name",
+      "Pcode not in geobase"
+    ),
+    `N visits` = n_visits,
+    `N cases` = n_cases
+  ) |>
+  dplyr::arrange(Precision, dplyr::desc(`N visits`))
+
+quality$hf_summary <- list(
+  n_total = nrow(hf_cases),
+  n_matched = sum(!is.na(hf_cases$lon)),
+  precision = hf_named |>
+    dplyr::left_join(
+      dplyr::select(hf_cases, raw_name, precision),
+      by = dplyr::join_by(raw_name),
+      relationship = "many-to-one"
+    ) |>
+    dplyr::summarise(
+      .by = precision,
+      n_structures = dplyr::n_distinct(raw_name),
+      n_visits = dplyr::n(),
+      n_cases = dplyr::n_distinct(unique_id)
+    ) |>
+    dplyr::arrange(precision)
+)
 
 #* Geo data ------------------------------------------------
 

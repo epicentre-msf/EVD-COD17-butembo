@@ -114,12 +114,13 @@ ui <- page_navbar(
       title = "Courbes épidémiques stratifiées",
       value = "epicurve_hz",
       mod_epicurve_hz_ui("epicurve_hz", group_vars = group_vars)
-    ),
-    nav_panel(
-      title = "Formations sanitaires",
-      value = "facilities",
-      mod_facilities_ui("facilities")
     )
+  ),
+
+  nav_panel(
+    title = "Formations sanitaires",
+    value = "facilities",
+    mod_facilities_ui("facilities")
   ),
 
   nav_panel(

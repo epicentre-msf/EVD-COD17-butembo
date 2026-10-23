@@ -9,7 +9,7 @@
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- TRUE
 # FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- TRUE
+PREP_LAB_DATA <- FALSE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 
@@ -333,10 +333,6 @@ ll_narr_clean <- ll_narr |>
   select(-id_key) |>
   relocate(unique_id)
 
-cli::cli_alert_info(
-  "{nrow(ll_narr_clean)} cases kept of {n_import}: \\
-   {n_import - nrow(ll_narr_clean)} outside {toString(CONFIG$filter_hz)}"
-)
 
 #* Transmission pairs ---------------------------------------------
 transmission_data <- rio::import(fs::path(
@@ -447,17 +443,35 @@ cli::cli_alert_info(
 dupes_id <- ll_narr_clean |>
   filter(!is.na(pid)) |>
   janitor::get_dupes(pid) |>
-  select(unique_id, pid, age, sex, adm2_comptabilisation)
+  select(
+    pid,
+    unique_id,
+    adm2_comptabilisation,
+    nom,
+    age,
+    age_unit,
+    sex,
+    date_notification,
+    date_lab_result_1,
+    lab_id_1,
+    dupe_count
+  )
 
 cli::cli_alert_warning(
   "{nrow(dupes_id)} duplicated rows across {n_distinct(dupes_id$pid)} pid"
 )
 cli::cli_alert_warning("{sum(is.na(ll_narr_clean$pid))} rows with no pid")
 
-rio::export(dupes_id, fs::path(tables_dir, "dupes_id.xlsx"))
+#! export duplicates pid for removal
+dupes_id |>
+  arrange(pid) |>
+  qxl::qxl(
+    file = fs::path(tables_dir, "pid_duplicates.xlsx"),
+    group = "pid",
+    filter = TRUE
+  )
 
 #! Export the linelist: Donnees/ in sharepoint
-
 if (EXPORT_TO_SHAREPOINT) {
   saveRDS(
     ll_narr_clean,
@@ -478,33 +492,37 @@ saveRDS(
 
 #* HEALTH FACILITY VISITS ------------------
 
-# copied locally once; delete the local file to refresh from SharePoint
-if (!fs::file_exists(local_hf_geo_csv)) {
-  fs::file_copy(hf_geo_csv, local_hf_geo_csv)
-}
-hf_geo_raw <- rio::import(local_hf_geo_csv) |>
+# list of facilities
+but_hf <- rio::import(latest_narr_ll, sheet = "facilities", skip = 2) |>
   as_tibble() |>
-  clean_names() |>
-  rename(raw_name = isolation_site_id)
+  # rows only: dropping empty columns would remove a field nobody filled
+  janitor::remove_empty(which = c("rows", "cols"))
 
-# x/y are Web Mercator metres; the app and flow mapper need lon/lat
-hf_xy <- hf_geo_raw |>
-  filter(!is.na(x), !is.na(y)) |>
-  select(raw_name, hf_pcode = pcode, x, y)
-hf_lonlat <- hf_xy |>
-  st_as_sf(coords = c("x", "y"), crs = 3857) |>
-  st_transform(4326)
-hf_xy <- hf_xy |>
-  mutate(
-    lon = st_coordinates(hf_lonlat)[, 1],
-    lat = st_coordinates(hf_lonlat)[, 2]
-  ) |>
-  select(raw_name, hf_pcode, lon, lat)
-cli::cli_alert_info(
-  "{nrow(hf_xy)} of {nrow(hf_geo_raw)} structures in the matching table have coordinates"
+#! load the latest GIS geobase replace when identified
+hf_gis_geojson <- fs::path(
+  butembo_project_data_path,
+  "spatiale",
+  "hf_gis_butembo_20261023.geojson"
 )
 
-# isolation site as a final visit, same layout as the pivoted visit slots
+hf_gis <- sf::st_read(hf_gis_geojson, quiet = TRUE) |>
+  janitor::clean_names()
+
+# ! Add isolation sites (CTE / CT)
+
+#*
+
+#* Notification structure
+hf_notification <- ll_narr_clean |>
+  filter(!is.na(facility_notification)) |>
+  transmute(
+    unique_id,
+    hf_name = str_squish(str_split_i(facility_notification, fixed("|"), 1)),
+    notification = TRUE
+  ) |>
+  distinct()
+
+#* Isolation structure
 hf_isolation <- ll_narr_clean |>
   filter(!is.na(isolation_site_id)) |>
   transmute(
@@ -518,7 +536,7 @@ hf_isolation <- ll_narr_clean |>
     visit_type = "isolation"
   )
 
-# one row per visit
+#* Visited structures
 hf_visits <- ll_narr_clean |>
   select(
     unique_id,
@@ -537,17 +555,23 @@ hf_visits <- ll_narr_clean |>
     values_drop_na = TRUE,
   ) |>
   rename_with(\(x) str_remove(x, "_$")) |>
-  mutate(across(where(is.character), \(x) na_if(str_squish(x), ""))) |>
-  mutate(visit_type = "visited") |>
+  mutate(
+    across(where(is.character), \(x) na_if(str_squish(x), "")),
+    visit_type = "visited"
+  ) |>
   bind_rows(hf_isolation) |>
   arrange(unique_id, visit) |>
-  # drops the empty visit slots the wide layout leaves behind
-  # filter(!is.na(HF_name_visited)) |>
   rename(hf_name = HF_name_visited) |>
   mutate(
-    # untouched export string: the key into the matching table
+    hf_name = if_else(
+      str_detect(hf_name, regex("non connu|inconnu", ignore_case = TRUE)),
+      NA_character_,
+      hf_name
+    )
+  ) |>
+  mutate(
     raw_name = hf_name,
-    # "site | aire de santé | zone de santé" where the encoding is present
+    # "site | aire de santé | zone de santé | pcode"
     hf_as = if_else(
       str_detect(hf_name, fixed("|")),
       str_squish(str_split_i(hf_name, fixed("|"), 2)),
@@ -555,159 +579,84 @@ hf_visits <- ll_narr_clean |>
     ),
     hf_zs = if_else(
       str_detect(hf_name, fixed("|")),
-      str_squish(str_split_i(hf_name, fixed("|"), -1)),
+      str_squish(str_split_i(hf_name, fixed("|"), 3)),
       NA_character_
     ),
-    hf_name = str_squish(str_split_i(hf_name, fixed("|"), 1)),
-    # the Graben clinic is recorded under several names
-    hf_name = if_else(
-      str_detect(hf_name, regex("graben|clinique", ignore_case = TRUE)),
-      "UCG",
-      hf_name
+    hf_pcode = if_else(
+      str_detect(hf_name, fixed("|")),
+      str_squish(str_split_i(hf_name, fixed("|"), 4)),
+      NA_character_
     ),
+    hf_pcode = na_if(hf_pcode, "Non trouvé"),
+    hf_name = str_squish(str_split_i(hf_name, fixed("|"), 1)),
     # initials for the dashboard timeline, e.g. "CH La Guerison" -> "CLG"
     hf_abbr = purrr::map_chr(
       str_split(hf_name, "\\s+"),
       \(w) paste(str_to_upper(str_sub(w, 1, 1)), collapse = "")
     ),
     across(c(date_start_HF_visited, date_end_HF_visited), as.Date),
-    # raw export typo: 2030-05-26 entered for 2026-05-30
-    across(
-      c(date_start_HF_visited, date_end_HF_visited),
-      \(x) if_else(x == as.Date("2030-05-26"), as.Date("2026-05-30"), x)
-    ),
+
     los = as.numeric(date_end_HF_visited - date_start_HF_visited),
-    # negative stay = data-entry error
-    los = if_else(los < 0, NA_real_, los)
+    # negative stay = data-entry error; same-day visit counts as 1 day
+    los = if_else(los < 0, NA_real_, los + 1)
   ) |>
+  left_join(
+    hf_notification,
+    by = join_by(unique_id, hf_name),
+    na_matches = "never",
+    relationship = "many-to-one"
+  ) |>
+  mutate(notification = coalesce(notification, FALSE)) |>
   # unique_id is the key app_data joins on; pid stays internal to prep
   select(-pid)
 
-# some cases list the whole pathway up to isolation, others stop before it
-hf_last_visited <- hf_visits |>
-  filter(visit_type == "visited", !is.na(hf_name)) |>
-  summarise(.by = unique_id, last_visited_name = last(hf_name))
+# isolation already recorded as a visit would count the case twice
 n_before <- nrow(hf_visits)
-n_iso <- sum(hf_visits$visit_type == "isolation")
 hf_visits <- hf_visits |>
-  left_join(
-    hf_last_visited,
-    by = join_by(unique_id),
-    relationship = "many-to-one"
+  mutate(
+    .by = c(unique_id, hf_name),
+    isolated_here = any(visit_type == "isolation"),
+    keep = is.na(hf_name) |
+      visit_type == "visited" |
+      !any(visit_type == "visited")
   ) |>
-  # isolation already recorded as the last visit would count the case twice
-  filter(
-    !(visit_type == "isolation" &
-      coalesce(hf_name == last_visited_name, FALSE))
-  ) |>
-  select(-last_visited_name)
+  filter(keep) |>
+  select(-keep)
 cli::cli_alert_info(
-  "{n_iso} isolation rows added; {n_before - nrow(hf_visits)} dropped as \\
-   the last recorded visit, {n_iso - (n_before - nrow(hf_visits))} kept"
+  "{n_before - nrow(hf_visits)} isolation rows dropped: \\
+   same structure already visited by the case"
 )
 
+n_notif_lost <- nrow(anti_join(
+  hf_notification,
+  hf_visits,
+  by = join_by(unique_id, hf_name)
+))
+cli::cli_alert_info(
+  "{n_notif_lost} of {nrow(hf_notification)} notifying structures are not \\
+   among the case's visits, so carry no notification flag"
+)
+
+cli::cli_alert_info(
+  "{sum(is.na(hf_visits$hf_name))} visits have no usable structure name"
+)
 
 cli::cli_alert_info(
   "{nrow(hf_visits)} visits recorded by \\
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
 
-# visits with no structure name cannot be counted or linked
-n_before <- nrow(hf_visits)
-hf_named <- hf_visits |>
-  filter(!is.na(raw_name))
-cli::cli_alert_info(
-  "{n_before - nrow(hf_named)} of {n_before} visits dropped: no structure name"
-)
-
-#* Cases per structure, geo-matched ----------
-hf_cases <- hf_named |>
-  summarise(
-    .by = c(raw_name, hf_name, hf_as, hf_zs),
-    n_cases = n_distinct(unique_id)
-  )
-n_before <- nrow(hf_cases)
-hf_cases <- hf_cases |>
-  left_join(
-    hf_xy,
-    by = join_by(raw_name),
-    relationship = "many-to-one"
-  )
-stopifnot(nrow(hf_cases) == n_before)
-
-# finest level at which each structure can be placed; "AS non définie" is a placeholder
-HF_PRECISION_LEVELS <- c(
-  "Health facility",
-  "Health area",
-  "Health zone",
-  "Not located"
-)
-hf_cases <- hf_cases |>
+# ! Matching sucess
+hf_visits |>
+  filter(!is.na(raw_name)) |>
   mutate(
-    precision = case_when(
-      !is.na(lon) ~ "Health facility",
-      !is.na(hf_as) & hf_as != "AS non définie" ~ "Health area",
-      !is.na(hf_zs) ~ "Health zone",
-      .default = "Not located"
-    ),
-    precision = factor(precision, levels = HF_PRECISION_LEVELS)
-  )
-
-cli::cli_alert_info(
-  "{sum(is.na(hf_cases$lon))} of {nrow(hf_cases)} structures \\
-   ({sum(hf_cases$n_cases[is.na(hf_cases$lon)])} case-visits) have no coordinates"
-)
-
-#* Flows between structures, geo-matched -----
-# consecutive visits per case, ordered by start date then visit slot
-hf_flows <- hf_named |>
-  arrange(unique_id, date_start_HF_visited, visit) |>
-  mutate(
-    from = raw_name,
-    to = lead(raw_name),
-    .by = unique_id
+    status = case_when(
+      is.na(hf_pcode) ~ "no pcode in name",
+      hf_pcode %in% hf_gis$pcode ~ "matched",
+      .default = "pcode not in geobase"
+    )
   ) |>
-  filter(!is.na(to))
-n_pairs <- nrow(hf_flows)
-hf_flows <- hf_flows |>
-  filter(from != to)
-cli::cli_alert_info(
-  "{n_pairs - nrow(hf_flows)} of {n_pairs} consecutive pairs dropped: same structure twice"
-)
-hf_flows <- hf_flows |>
-  summarise(.by = c(from, to), n_cases = n_distinct(unique_id))
-n_before <- nrow(hf_flows)
-hf_flows <- hf_flows |>
-  left_join(
-    hf_xy |> rename_with(\(x) paste0("from_", x), -raw_name),
-    by = join_by(from == raw_name),
-    relationship = "many-to-one"
-  ) |>
-  left_join(
-    hf_xy |> rename_with(\(x) paste0("to_", x), -raw_name),
-    by = join_by(to == raw_name),
-    relationship = "many-to-one"
-  )
-stopifnot(nrow(hf_flows) == n_before)
-cli::cli_alert_info(
-  "{sum(is.na(hf_flows$from_lon) | is.na(hf_flows$to_lon))} of {n_before} \\
-   flows lack coordinates at one end and cannot be mapped"
-)
-
-
-# compare to GIS flow
-hf_flow_gis <- sf::st_read(hf_flow_gis_path, quiet = TRUE)
-cli::cli_alert_info(
-  "hf_flow_gis: {nrow(hf_flow_gis)} features, {unique(as.character(sf::st_geometry_type(hf_flow_gis)))}"
-)
-
-hf_flow_gis |>
-  filter(hf_depart == "HGR Kitatumba")
-
-hf_flows |>
-  filter(str_detect(from, "HGR Kitatumba")) |>
-  select(from, to)
-
+  count(visit_type, status)
 
 #* LAB DATA --------------------------------
 # Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
@@ -891,64 +840,6 @@ adm3 <- prep_app_layer(adm3)
 #* Data-quality tables (Data quality tab) ----------------------------------
 quality <- build_quality(ll_narr_clean)
 
-# visited structures that could not be mapped, as the Health facilities pane reads them
-quality$hf_unmatched <- hf_named |>
-  anti_join(hf_xy, by = join_by(raw_name)) |>
-  summarise(
-    .by = c(raw_name, hf_name, hf_as, hf_zs),
-    `N visits` = n(),
-    `N cases` = n_distinct(unique_id)
-  ) |>
-  left_join(
-    select(hf_cases, raw_name, Precision = precision),
-    by = join_by(raw_name),
-    relationship = "many-to-one"
-  ) |>
-  mutate(
-    Reason = if_else(
-      raw_name %in% hf_geo_raw$raw_name,
-      "In matching table, no coordinates",
-      "Not in matching table"
-    )
-  ) |>
-  select(
-    Structure = hf_name,
-    `Health area` = hf_as,
-    `Health zone` = hf_zs,
-    Precision,
-    Reason,
-    `N visits`,
-    `N cases`
-  ) |>
-  arrange(Precision, desc(`N visits`))
-
-# structures, visits and cases by finest geographic level reached
-hf_precision <- hf_named |>
-  left_join(
-    select(hf_cases, raw_name, precision),
-    by = join_by(raw_name),
-    relationship = "many-to-one"
-  ) |>
-  summarise(
-    .by = precision,
-    n_structures = n_distinct(raw_name),
-    n_visits = n(),
-    n_cases = n_distinct(unique_id)
-  ) |>
-  arrange(precision)
-stopifnot(sum(hf_precision$n_visits) == nrow(hf_named))
-
-quality$hf_summary <- list(
-  n_total = nrow(hf_cases),
-  n_matched = sum(!is.na(hf_cases$lon)),
-  precision = hf_precision
-)
-stopifnot(
-  nrow(quality$hf_unmatched) ==
-    quality$hf_summary$n_total -
-      quality$hf_summary$n_matched
-)
-
 # variables with no section, or beyond the first two HF slots, are not shown
 n_quality_hidden <- length(setdiff(
   setdiff(names(ll_narr_clean), QUALITY_EXCLUDE_VARS),
@@ -974,8 +865,7 @@ app_data <- list(
   linelist = add_delay_pairs(ll_narr_clean, delay_dates),
   quality = quality,
   hf_visits = hf_visits,
-  hf_cases = hf_cases,
-  hf_flows = hf_flows,
+  hf_gis = sf::st_transform(hf_gis, 4326),
   lab_data = lab_data,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )

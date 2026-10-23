@@ -154,7 +154,7 @@ server <- function(input, output, session) {
     "facilities",
     df = df_period,
     hf_visits = hf_visits,
-    hf_cases = hf_cases,
+    hf_geo = hf_geo,
     flow_locations = flow_locations,
     flow_edges = flow_edges,
     adm2 = app_data$admin_data$adm2,
