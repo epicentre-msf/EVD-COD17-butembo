@@ -219,8 +219,25 @@ local_geobase_dir <- fs::path(local_dir, "geobase")
 local_ll_dir <- fs::path(local_dir, "linelist")
 local_hf_dir <- fs::path(local_dir, "hf-visits")
 local_hf_geo_csv <- fs::path(local_hf_dir, fs::path_file(hf_geo_csv))
+local_dupes_dir <- fs::path(local_dir, "dupes")
+local_transmission_dir <- fs::path(local_dir, "transmission")
+local_lab_dir <- fs::path(local_dir, "lab-data")
+local_quality_dir <- fs::path(local_dir, "quality")
+local_app_layers_dir <- fs::path(local_dir, "app-layers")
+local_10th_dir <- fs::path(local_dir, "10th-outbreak")
+local_tables_dir <- fs::path(local_dir, "tables")
 
-fs::dir_create(c(local_geobase_dir, local_ll_dir, local_hf_dir))
+fs::dir_create(c(
+  local_tables_dir,
+  local_geobase_dir,
+  local_ll_dir,
+  local_hf_dir,
+  local_dupes_dir,
+  local_transmission_dir,
+  local_lab_dir,
+  local_quality_dir,
+  local_app_layers_dir
+))
 
 #* OUTPUT DIRECTORIES ------------------------------------
 out_dir <- here::here("output")

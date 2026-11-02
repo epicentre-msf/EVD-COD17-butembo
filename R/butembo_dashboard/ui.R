@@ -23,6 +23,38 @@ period_select <- tags$div(
   )
 )
 
+# ISO week filter under the period filter; values are week Mondays
+iso_mondays <- seq(
+  lubridate::floor_date(min(but_ll$date_lab_result_1, na.rm = TRUE), "week", week_start = 1),
+  lubridate::floor_date(max(but_ll$date_lab_result_1, na.rm = TRUE), "week", week_start = 1),
+  by = "week"
+)
+iso_week_choices <- c(
+  "Toutes" = "all",
+  stats::setNames(
+    as.character(rev(iso_mondays)),
+    paste0(format(rev(iso_mondays), "%G"), "-S", format(rev(iso_mondays), "%V"))
+  )
+)
+iso_week_select <- tags$div(
+  class = "d-flex justify-content-start mb-2 map-timeperiod",
+  shiny::selectizeInput(
+    "iso_week",
+    label = NULL,
+    choices = iso_week_choices,
+    selected = "all",
+    width = "100%",
+    options = list(
+      openOnFocus = FALSE,
+      render = I(
+        "{ item: function(item, escape) {
+        return '<div><b>Semaine ISO</b>: <span class=\"map-dd-value\">' + escape(item.label) + '</span></div>';
+      } }"
+      )
+    )
+  )
+)
+
 # user interface
 ui <- page_navbar(
   title = "Surveillance BVD Butembo",
@@ -42,7 +74,12 @@ ui <- page_navbar(
           as.integer(file.mtime("www/styles.css"))
         )
       ),
-      tags$script(src = "assets/recolour.js")
+      tags$script(
+        src = paste0(
+          "assets/recolour.js?v=",
+          as.integer(file.mtime("www/recolour.js"))
+        )
+      )
     )
   ),
   sidebar = filter_ui(
@@ -60,6 +97,7 @@ ui <- page_navbar(
       # period first: it also drives the lab tab, which the filters below do not
       bslib::sidebar(
         period_select,
+        iso_week_select,
         ...,
         id = "filter",
         bg = "#fff",

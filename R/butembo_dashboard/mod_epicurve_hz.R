@@ -204,8 +204,8 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
           )
         }
 
-        # Latest data week is still filling; Sys.Date() lags the data, so key off the data
-        this_week <- lubridate::floor_date(max(d$date), "week", week_start = 1)
+        # Calendar week still in progress, so its count is incomplete
+        this_week <- lubridate::floor_date(Sys.Date(), "week", week_start = 1)
 
         d <- d |>
           dplyr::summarise(.by = c(hz, grp, date), n = sum(n)) |>

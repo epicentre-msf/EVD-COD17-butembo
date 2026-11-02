@@ -546,7 +546,7 @@ mod_lab_server <- function(id, df_all) {
 }
 
 # Binned on notification date, so a point is the wait for cases notified then.
-plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
+plot_lab_delay_trend <- function(d, agg = c("week", "month"), min_n = 10) {
   agg <- match.arg(agg)
 
   delay_df <- dplyr::transmute(
@@ -565,7 +565,11 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
         week_start = getOption("epishiny.week.start", 1)
       )
     ) |>
-    dplyr::summarise(mean = mean(delay), n = dplyr::n(), .by = bin) |>
+    dplyr::summarise(mean = mean(delay), n = dplyr::n(), .by = bin)
+  # a mean on 10 samples or fewer is too noisy to plot
+  n_bins_small <- sum(summ$n <= min_n)
+  summ <- summ |>
+    dplyr::filter(n > min_n) |>
     dplyr::arrange(bin) |>
     dplyr::mutate(x = highcharter::datetime_to_timestamp(bin))
 
@@ -590,7 +594,9 @@ plot_lab_delay_trend <- function(d, agg = c("week", "month")) {
       enabled = TRUE,
       text = paste0(
         scales::number(n_removed),
-        " échantillons exclus (date manquante ou délai invalide)"
+        " échantillons exclus (date manquante ou délai invalide) ; ",
+        n_bins_small,
+        " intervalles masqués (n ≤ ", min_n, ")"
       )
     )
 

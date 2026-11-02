@@ -2,14 +2,21 @@
 
 mod_zs_table_ui <- function(id) {
   ns <- shiny::NS(id)
-  bslib::card(
+  bslib::navset_card_tab(
     full_screen = TRUE,
-    bslib::card_header(
+    title = htmltools::div(
       class = "d-flex align-items-center flex-wrap gap-3",
       "Cas confirmés par zone de santé",
       shiny::uiOutput(ns("footnote"))
     ),
-    bslib::card_body(reactable::reactableOutput(ns("tbl")))
+    bslib::nav_panel(
+      "Par date de résultat",
+      reactable::reactableOutput(ns("tbl"))
+    ),
+    bslib::nav_panel(
+      "Notifiés par semaine",
+      reactable::reactableOutput(ns("tbl_weeks"))
+    )
   )
 }
 
@@ -93,6 +100,91 @@ mod_zs_table_server <- function(id, df) {
           j7 = count_col("7 j", "j7"),
           j21 = count_col("21 j", "j21"),
           total = count_col("Total", "total")
+        )
+      )
+    })
+    # last 5 ISO weeks including the current one, anchored on today like the epiweek box
+    output$tbl_weeks <- reactable::renderReactable({
+      this_week <- lubridate::floor_date(Sys.Date(), "week", week_start = 1)
+      weeks <- this_week - 7 * 4:0
+      wk_ids <- paste0("w", seq_along(weeks))
+
+      d <- df() |>
+        dplyr::filter(EVD_status == "Confirmed") |>
+        dplyr::mutate(
+          zone = dplyr::coalesce(as.character(adm2_comptabilisation), na_lab),
+          wk = lubridate::floor_date(
+            date_notification,
+            "week",
+            week_start = 1
+          )
+        )
+
+      tbl <- tibble::tibble(zone = unique(d$zone))
+      for (i in seq_along(weeks)) {
+        n_wk <- d |>
+          dplyr::filter(wk == weeks[i]) |>
+          dplyr::count(zone, name = wk_ids[i])
+        tbl <- dplyr::left_join(
+          tbl,
+          n_wk,
+          by = dplyr::join_by(zone),
+          relationship = "one-to-one"
+        )
+      }
+      tbl <- tbl |>
+        dplyr::mutate(dplyr::across(dplyr::all_of(wk_ids), \(x) {
+          dplyr::coalesce(x, 0L)
+        })) |>
+        dplyr::mutate(total = rowSums(dplyr::pick(dplyr::all_of(wk_ids)))) |>
+        dplyr::arrange(dplyr::desc(total))
+      shiny::req(nrow(tbl) > 0)
+
+      max_n <- max(unlist(tbl[wk_ids]), 1)
+      ramp <- scales::col_numeric(c("#ffffff", "#9e2a2b"), c(0, max_n))
+      wk_col <- \(nm, id) {
+        reactable::colDef(
+          name = nm,
+          footer = sum(tbl[[id]]),
+          style = \(v) {
+            list(
+              background = ramp(v),
+              color = if (v > 0.6 * max_n) "#ffffff" else "#212529"
+            )
+          }
+        )
+      }
+      wk_cols <- purrr::map2(
+        paste0("S", lubridate::isoweek(weeks)),
+        wk_ids,
+        wk_col
+      ) |>
+        rlang::set_names(wk_ids)
+
+      reactable::reactable(
+        tbl,
+        highlight = TRUE,
+        compact = TRUE,
+        pagination = FALSE,
+        theme = reactable::reactableTheme(
+          style = list(fontSize = "0.82rem"),
+          headerStyle = list(fontSize = "0.78rem", fontWeight = 600),
+          footerStyle = list(fontWeight = 600),
+          cellPadding = "4px 6px"
+        ),
+        defaultColDef = reactable::colDef(align = "center", minWidth = 60),
+        columns = c(
+          list(
+            zone = reactable::colDef(
+              name = "Zone de santé",
+              align = "left",
+              footer = "Total"
+            )
+          ),
+          wk_cols,
+          list(
+            total = reactable::colDef(name = "Total", footer = sum(tbl$total))
+          )
         )
       )
     })

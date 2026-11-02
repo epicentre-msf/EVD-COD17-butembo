@@ -9,7 +9,7 @@
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- TRUE
 # FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- FALSE
+PREP_LAB_DATA <- TRUE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 
@@ -63,7 +63,7 @@ ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
 
 n_import <- nrow(ll_narr)
 
-#* CLEAN LINELIST --------------------------
+#* I. LINELIST --------------------------
 ll_narr_clean <- ll_narr |>
   mutate(
     # squish first, so a whitespace-only cell counts as empty
@@ -307,6 +307,12 @@ ll_narr_clean <- ll_narr |>
       ),
       levels = c("Dead on notification", "Alive on notification", "Unknown")
     ),
+    # factor, not logical, so the dashboard can group by it
+    infector_identified = factor(
+      if_else(is.na(infector_name_1), "No", "Yes"),
+      levels = c("Yes", "No")
+    ),
+
     transmission_type_1 = factor(
       case_match(
         transmission_type_1,
@@ -333,113 +339,26 @@ ll_narr_clean <- ll_narr |>
   select(-id_key) |>
   relocate(unique_id)
 
-
-#* Transmission pairs ---------------------------------------------
-transmission_data <- rio::import(fs::path(
-  transmission_dir,
-  "butembo_transmission_pairs.xlsx"
-)) |>
-  as_tibble() |>
-  mutate(
-    across(c(start_exposure, end_exposure), harmonize_dates),
-    # match the type of pid, whichever way the export stored it
-    id_infectee = if (is.character(ll_narr_clean$pid)) {
-      as.character(id_infectee)
-    } else {
-      as.numeric(id_infectee)
-    },
-    only_exposure = tolower(as.character(only_exposure)) %in%
-      c("yes", "oui", "true", "1"),
-    most_probable = tolower(as.character(most_probable)) %in%
-      c("yes", "oui", "true", "1")
-  ) |>
-  filter(!is.na(id_infectee))
-
-# one pair per infectee: the most probable when several are listed
-n_pairs <- nrow(transmission_data)
-transmission_one <- transmission_data |>
-  arrange(id_infectee, desc(most_probable)) |>
-  slice(1, .by = id_infectee)
-cli::cli_alert_info(
-  "{n_pairs - nrow(transmission_one)} of {n_pairs} transmission pairs dropped: \\
-   not the most probable for their infectee"
-)
-n_tie <- transmission_data |>
-  filter(most_probable) |>
-  count(id_infectee) |>
-  filter(n > 1) |>
-  nrow()
-if (n_tie > 0) {
-  cli::cli_alert_warning(
-    "{n_tie} infectees have several most_probable pairs: first row kept"
-  )
-}
-
-n_before <- nrow(ll_narr_clean)
-ll_narr_clean <- ll_narr_clean |>
-  left_join(
-    transmission_one |>
-      select(
-        id_infectee,
-        only_exposure,
-        tr_infector_id = id_infector,
-        tr_infector_name = name_infector,
-        tr_start = start_exposure,
-        tr_end = end_exposure
-      ),
-    by = join_by(pid == id_infectee),
-    relationship = "many-to-one"
-  ) |>
-  mutate(
-    # only_exposure pairs bring dates, not an infector
-    tr_infector_id = if_else(
-      !is.na(only_exposure) & only_exposure,
-      NA,
-      as.character(tr_infector_id)
-    ),
-    tr_infector_name = if_else(
-      !is.na(only_exposure) & only_exposure,
-      NA_character_,
-      as.character(tr_infector_name)
-    ),
-    infector_ID_1 = dplyr::coalesce(
-      tr_infector_id,
-      as.character(infector_ID_1)
-    ),
-    infector_name_1 = dplyr::coalesce(tr_infector_name, infector_name_1),
-    start_exposure_date_1 = dplyr::coalesce(tr_start, start_exposure_date_1),
-    end_exposure_date_1 = dplyr::coalesce(tr_end, end_exposure_date_1)
-  ) |>
-  select(-c(only_exposure, starts_with("tr_"))) |>
-  mutate(
-    # factor, not logical, so the dashboard can group by it
-    infector_identified = factor(
-      if_else(is.na(infector_name_1), "No", "Yes"),
-      levels = c("Yes", "No")
+#! Export the linelist: Donnees/ in sharepoint
+if (EXPORT_TO_SHAREPOINT) {
+  saveRDS(
+    ll_narr_clean,
+    fs::path(
+      narr_ll_clean_dir,
+      glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
     )
   )
-stopifnot("transmission join changed N" = nrow(ll_narr_clean) == n_before)
-cli::cli_alert_info(
-  "{n_before} -> {nrow(ll_narr_clean)} rows; {sum(transmission_one$id_infectee %in% ll_narr_clean$pid)} \\
-   of {nrow(transmission_one)} infectees matched a pid, \\
-   {sum(ll_narr_clean$infector_identified == 'Yes')} cases with an infector"
-)
-# adm3_name__res unmatched against the geobase: no pcode, so no map join
-n_res_unmatched <- with(
+}
+# export local version
+saveRDS(
   ll_narr_clean,
-  sum(!is.na(adm3_name__res) & is.na(adm3_pcode__res))
-)
-cli::cli_alert_warning(
-  "{n_res_unmatched} rows have adm3_name__res with no matching adm3_pcode__res"
-)
-cli::cli_alert_info(
-  "{n_distinct(ll_narr_clean$unique_id)} unique_id across \\
-   {nrow(ll_narr_clean)} rows"
+  fs::path(
+    local_ll_dir,
+    glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
+  )
 )
 
-#* Duplicate and missing pid ---------------
-# review only, nothing dropped, so no denominator moves
-# ! nom left out: the export must stay non-nominative
+#* II. DUPLICATES ---------------------------
 dupes_id <- ll_narr_clean |>
   filter(!is.na(pid)) |>
   janitor::get_dupes(pid) |>
@@ -466,31 +385,68 @@ cli::cli_alert_warning("{sum(is.na(ll_narr_clean$pid))} rows with no pid")
 dupes_id |>
   arrange(pid) |>
   qxl::qxl(
-    file = fs::path(tables_dir, "pid_duplicates.xlsx"),
+    file = fs::path(
+      local_dupes_dir,
+      glue::glue("{CONFIG$export_prefix}_pid_duplicates__{time_write}.xlsx")
+    ),
     group = "pid",
     filter = TRUE
   )
 
-#! Export the linelist: Donnees/ in sharepoint
-if (EXPORT_TO_SHAREPOINT) {
-  saveRDS(
-    ll_narr_clean,
-    fs::path(
-      narr_ll_clean_dir,
-      glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
-    )
+#* III. TRANSMISSION ---------------------------------------------
+transmission_events <- ll_narr_clean |>
+  select(
+    unique_id,
+    pid,
+    nom,
+    matches(paste0(
+      "^(transmission_type|transmission_place|HF_name_transmission|",
+      "infector_ID|infector_name|start_exposure_date|end_exposure_date|",
+      "chain_name|adm[1-4]_name__transmission|source_confidence)_[12]$"
+    ))
+  ) |>
+  # ids must share a type across sets before pivoting
+  mutate(across(starts_with("infector_ID_"), as.character)) |>
+  tidyr::pivot_longer(
+    cols = -c(unique_id, pid, nom),
+    names_to = c(".value", "transmission_set"),
+    names_pattern = "(.*)_([12])$"
   )
-}
+
+n_sets <- nrow(transmission_events)
+transmission_events <- transmission_events |>
+  filter(!is.na(infector_ID) | !is.na(infector_name))
+cli::cli_alert_info(
+  "{n_sets - nrow(transmission_events)} of {n_sets} case-sets dropped: \\
+   no infector id or name; {nrow(transmission_events)} transmission events \\
+   over {n_distinct(transmission_events$unique_id)} cases"
+)
+
+# pid is the id we trust for linking cases
+transmission_events <- transmission_events |>
+  select(
+    from_pid = infector_ID,
+    from_name = infector_name,
+    to_pid = pid,
+    to_name = nom,
+    to_unique_id = unique_id,
+    everything()
+  )
+cli::cli_alert_info(
+  "{sum(is.na(transmission_events$from_pid))} of {nrow(transmission_events)} \\
+   events have an infector name but no infector pid"
+)
+
 # export local version
 saveRDS(
-  ll_narr_clean,
+  transmission_events,
   fs::path(
-    local_ll_dir,
-    glue::glue("{CONFIG$export_prefix}_linelist__{time_write}.rds")
+    local_transmission_dir,
+    glue::glue("{CONFIG$export_prefix}_transmission_events__{time_write}.rds")
   )
 )
 
-#* HEALTH FACILITY VISITS ------------------
+#* IV. HEALTH FACILITY VISITS ------------------
 
 # list of facilities
 but_hf <- rio::import(latest_narr_ll, sheet = "facilities", skip = 2) |>
@@ -507,10 +463,6 @@ hf_gis_geojson <- fs::path(
 
 hf_gis <- sf::st_read(hf_gis_geojson, quiet = TRUE) |>
   janitor::clean_names()
-
-# ! Add isolation sites (CTE / CT)
-
-#*
 
 #* Notification structure
 hf_notification <- ll_narr_clean |>
@@ -646,8 +598,8 @@ cli::cli_alert_info(
    {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
 )
 
-# ! Matching sucess
-hf_visits |>
+# printed in the data-quality section
+hf_match_summary <- hf_visits |>
   filter(!is.na(raw_name)) |>
   mutate(
     status = case_when(
@@ -658,7 +610,15 @@ hf_visits |>
   ) |>
   count(visit_type, status)
 
-#* LAB DATA --------------------------------
+saveRDS(
+  hf_visits,
+  fs::path(
+    local_hf_dir,
+    glue::glue("{CONFIG$export_prefix}_hf_visits__{time_write}.rds")
+  )
+)
+
+#* V. LAB DATA --------------------------------
 # Separate lab database, not the linelist lab_*_1:2 slots. Path and layout TBC.
 if (PREP_LAB_DATA) {
   # load
@@ -786,24 +746,62 @@ if (PREP_LAB_DATA) {
       "{col}: {sum(invalid)} of {n_valid_before} set to NA (negative or > {max_lab_delay} days)"
     )
   }
-} else {
-  # reuse the previous export, so the Lab tab keeps its data
-  stopifnot(
-    "no previous app_data.rds to reuse lab_data from" = fs::file_exists(
-      app_data_path
+
+  saveRDS(
+    lab_data,
+    fs::path(
+      local_lab_dir,
+      glue::glue("{CONFIG$export_prefix}_lab_data__{time_write}.rds")
     )
   )
-  lab_data <- readRDS(app_data_path)$lab_data
+} else {
+  # reuse the latest saved lab_data, so the Lab tab keeps its data
+  lab_files <- fs::dir_ls(
+    local_lab_dir,
+    regexp = paste0(CONFIG$export_prefix, "_lab_data__")
+  )
+  stopifnot("no saved lab_data rds to reuse" = length(lab_files) > 0)
+  lab_latest <- lab_files[which.max(fs::file_info(lab_files)$modification_time)]
+  lab_data <- readRDS(lab_latest)
   cli::cli_alert_info(
-    "lab data skipped: {nrow(lab_data)} rows reused from {fs::path_file(app_data_path)}"
+    "lab data skipped: {nrow(lab_data)} rows reused from {fs::path_file(lab_latest)}"
   )
 }
 
+#* VI. DATA QUALITY -------------------------------------------
+quality <- build_quality(ll_narr_clean)
 
-#* Prepare dashboard data -------------------------------------------
+# variables with no section, or beyond the first two HF slots, are not shown
+n_quality_hidden <- length(setdiff(
+  setdiff(names(ll_narr_clean), QUALITY_EXCLUDE_VARS),
+  quality$completeness$variable
+))
+cli::cli_alert_info(
+  "{nrow(quality$completeness)} variables in the completeness table, \\
+   {n_quality_hidden} left out (no section or excluded)"
+)
 
-# all pcodes needed for the data
+print(hf_match_summary)
 
+# dates the delay module pairs up, chronological so delays come out positive
+delay_dates <- c(
+  "date_symptom_onset",
+  "date_notification",
+  "date_admission_eff",
+  "date_lab_result_1",
+  "date_exit_eff"
+)
+
+saveRDS(
+  quality,
+  fs::path(
+    local_quality_dir,
+    glue::glue("{CONFIG$export_prefix}_quality__{time_write}.rds")
+  )
+)
+
+#* VII. APP GEOBASE -------------------------------------------
+# keep only the units the data reference, to keep the app light
 adm1_pcode_used <- unique(na.omit(c(
   ll_narr_clean$adm1_pcode__onset,
   ll_narr_clean$adm1_pcode__notif,
@@ -837,32 +835,19 @@ adm1 <- prep_app_layer(adm1)
 adm2 <- prep_app_layer(adm2)
 adm3 <- prep_app_layer(adm3)
 
-#* Data-quality tables (Data quality tab) ----------------------------------
-quality <- build_quality(ll_narr_clean)
-
-# variables with no section, or beyond the first two HF slots, are not shown
-n_quality_hidden <- length(setdiff(
-  setdiff(names(ll_narr_clean), QUALITY_EXCLUDE_VARS),
-  quality$completeness$variable
-))
-cli::cli_alert_info(
-  "{nrow(quality$completeness)} variables in the completeness table, \\
-   {n_quality_hidden} left out (no section or excluded)"
+saveRDS(
+  list(adm1 = adm1, adm2 = adm2, adm3 = adm3),
+  fs::path(
+    local_app_layers_dir,
+    glue::glue("{CONFIG$export_prefix}_app_admin_layers__{time_write}.rds")
+  )
 )
 
-# dates the delay module pairs up, chronological so delays come out positive
-delay_dates <- c(
-  "date_symptom_onset",
-  "date_notification",
-  "date_admission_eff",
-  "date_lab_result_1",
-  "date_exit_eff"
-)
-
-#* Save to server ------------------------------------------------------
-# app_data.rds feeds the evd-2026-app dashboard on episerv
+#* VIII. DASHBOARD BUNDLE ------------------------------------------------
+# app_data.rds feeds the evd-2026-app dashboard on episerv; overwritten each run
 app_data <- list(
   linelist = add_delay_pairs(ll_narr_clean, delay_dates),
+  transmission_events = transmission_events,
   quality = quality,
   hf_visits = hf_visits,
   hf_gis = sf::st_transform(hf_gis, 4326),

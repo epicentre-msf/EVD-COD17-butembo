@@ -46,15 +46,12 @@
     if (fadeLatestWeek(chart)) changed = true;
     if (changed) chart.redraw();
   }
-  // the latest data week is still filling; key off the data, as Sys.Date() lags it
+  // the calendar week in progress has an incomplete count
   function fadeLatestWeek(chart) {
-    var maxX = -Infinity;
-    chart.series.forEach(function (s) {
-      s.points.forEach(function (p) { if (p.x > maxX) maxX = p.x; });
-    });
-    if (!isFinite(maxX)) return false;
-    var dow = (new Date(maxX).getUTCDay() + 6) % 7;
-    var weekStart = maxX - dow * 864e5;
+    var now = new Date();
+    var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    var dow = (new Date(today).getUTCDay() + 6) % 7;
+    var weekStart = today - dow * 864e5;
     var changed = false;
     chart.series.forEach(function (s) {
       var faded = Highcharts.color(s.color).setOpacity(0.35).get("rgba");

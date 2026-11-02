@@ -481,3 +481,356 @@ etc_panel
 #* EXPORT POUR LE RAPPORT ----------------------------------------------
 # panneau complet (occupation + flux) en PNG pour la version .docx du rapport
 save_widget(etc_panel, "butembo_etc_panel.png", selector = ".etc-panel")
+
+#* SUSPECT POSITIVITY RATE ----------------------------------------------ct
+
+latest_ct_ug_path <- fs::dir_ls(fs::path(
+  butembo_project_data_path,
+  'linelists/ct_ucg/export_nominatif'
+)) |>
+  max()
+
+ct_ucg_ll <- rpxl::rp_xlsb(
+  latest_ct_ug_path,
+  password = "ebolaExport",
+  sheet = 1
+) |>
+  as_tibble()
+
+# Suspect and Probable are still pending, so only completed admissions count
+ucg_pos_tbl <- ct_ucg_ll |>
+  dplyr::filter(EVD_status %in% c("Confirmé", "Non cas")) |>
+  dplyr::mutate(
+    admission_week = lubridate::floor_date(
+      as.Date(date_admission_eff),
+      "week",
+      week_start = CONFIG$week_start
+    )
+  ) |>
+  dplyr::summarise(
+    n_completed = dplyr::n(),
+    n_confirmed = sum(EVD_status == "Confirmé"),
+    positivity = n_confirmed / n_completed,
+    .by = admission_week
+  ) |>
+  dplyr::arrange(admission_week)
+
+ucg_pos_tbl
+
+ucg_pos_plot <- ucg_pos_tbl |>
+  ggplot(aes(admission_week, positivity)) +
+  geom_line(colour = "#bc6161", linewidth = 2.5, alpha = 0.4) +
+  geom_point(
+    aes(size = n_completed),
+    shape = 21,
+    fill = scales::alpha("grey30", 0.95),
+    colour = "white",
+    stroke = 3
+  ) +
+  geom_text(
+    aes(label = scales::percent(positivity, 1)),
+    nudge_y = 0.04,
+    vjust = 0,
+    size = 3
+  ) +
+  scale_x_date(
+    breaks = ucg_pos_tbl$admission_week,
+    labels = \(d) paste0("W", lubridate::isoweek(d), "\n", format(d, "%d %b"))
+  ) +
+  scale_size_area(max_size = 12) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    limits = c(0, 1),
+    expand = expansion(mult = c(0.02, 0.1))
+  ) +
+  labs(
+    title = "Suspect positivity rate by week of admission, CT UCG",
+    x = "Week of admission (Monday)",
+    y = "Confirmed / completed admissions",
+    size = "Completed admissions"
+  ) +
+  epithemes::epitheme_gg() +
+  theme(panel.grid = element_blank())
+
+ucg_pos_plot
+
+ggsave(
+  fs::path(plots_dir, "ucg_positivity_plot.png"),
+  ucg_pos_plot,
+  width = 9,
+  height = 4.5,
+  dpi = 300,
+  bg = "white"
+)
+
+#* ADMISSION KITATUMBA ----------------------------------------------
+
+latest_cte_kit_path <- fs::dir_ls(fs::path(
+  butembo_project_data_path,
+  'linelists/cte_kitatumba/export_nominatif'
+)) |>
+  max()
+
+cte_kit_ll <- rpxl::rp_xlsb(
+  latest_cte_kit_path,
+  password = "ebolaExport",
+  sheet = 1
+) |>
+  as_tibble()
+
+# July to September are calendar months, October is split by week
+to_period <- function(d) {
+  dplyr::case_when(
+    d >= as.Date("2026-07-01") & d < as.Date("2026-08-01") ~ "Juil",
+    d >= as.Date("2026-08-01") & d < as.Date("2026-09-01") ~ "Août",
+    d >= as.Date("2026-09-01") & d < as.Date("2026-10-01") ~ "Sept",
+    d >= as.Date("2026-10-01") ~ paste0(
+      "Oct S",
+      lubridate::isoweek(
+        lubridate::floor_date(d, "week", week_start = CONFIG$week_start)
+      )
+    )
+  )
+}
+
+morgue_site <- "Morgue HGR Kitatumba | Kyangike | Butembo"
+
+# morgue entries are not isolation admissions
+cat(
+  "Morgue rows dropped:",
+  sum(cte_kit_ll$isolation_site_id %in% morgue_site),
+  "of",
+  nrow(cte_kit_ll),
+  "\n"
+)
+
+kit_adm <- cte_kit_ll |>
+  dplyr::filter(!isolation_site_id %in% morgue_site) |>
+  dplyr::mutate(
+    adm_period = to_period(as.Date(date_admission_eff)),
+    exit_period = to_period(as.Date(date_exit_eff)),
+    age_years = dplyr::case_match(
+      age_unit,
+      "Ans" ~ as.numeric(age),
+      "Mois" ~ as.numeric(age) / 12,
+      "Jour" ~ as.numeric(age) / 365.25
+    ),
+    exit_type = dplyr::case_when(
+      type_of_exit == "" ~ NA_character_,
+      type_of_exit == "Abandon" ~ "perdu_de_vue",
+      type_of_exit == "Guéri" ~ "gueri",
+      type_of_exit == "Retour a la maison (non cas)" ~ "sortie_non_cas",
+      type_of_exit == "Décédé" & EVD_status == "Confirmé" ~ "deces_confirme",
+      type_of_exit == "Décédé" & EVD_status == "Non cas" ~ "deces_non_cas",
+      type_of_exit == "Décédé" ~ "deces_suspect"
+    ),
+    # same-day deaths count as under 24h
+    death_delay = dplyr::case_when(
+      exit_type != "deces_confirme" ~ NA_character_,
+      as.Date(date_exit_eff) == as.Date(date_admission_eff) ~ "moins_24h",
+      as.Date(date_exit_eff) > as.Date(date_admission_eff) ~ "plus_24h"
+    )
+  )
+
+cat(
+  "Rows kept:",
+  nrow(kit_adm),
+  "\n",
+  "Admissions outside Jul-Oct:",
+  sum(is.na(kit_adm$adm_period)),
+  "\n",
+  "Exits outside Jul-Oct:",
+  sum(!is.na(kit_adm$exit_type) & is.na(kit_adm$exit_period)),
+  "\n",
+  "Confirmed deaths without a delay:",
+  sum(kit_adm$exit_type %in% "deces_confirme" & is.na(kit_adm$death_delay)),
+  "\n"
+)
+
+dplyr::count(kit_adm, EVD_status, exit_type, death_delay)
+
+#* Summary table data ----------------------------------------------------
+
+# the current week is incomplete, so it stays out of the table
+current_period <- to_period(Sys.Date())
+
+cat(
+  "Current week",
+  current_period,
+  "dropped: admissions",
+  sum(kit_adm$adm_period %in% current_period),
+  "| exits",
+  sum(!is.na(kit_adm$exit_type) & kit_adm$exit_period %in% current_period),
+  "\n"
+)
+
+period_levels <- c(
+  "Juil",
+  "Août",
+  "Sept",
+  sort(unique(grep(
+    "^Oct S",
+    c(kit_adm$adm_period, kit_adm$exit_period),
+    value = TRUE
+  )))
+) |>
+  setdiff(current_period)
+
+adm_counts <- kit_adm |>
+  dplyr::filter(!is.na(adm_period), adm_period != current_period) |>
+  dplyr::summarise(
+    adm_total = dplyr::n(),
+    adm_confirmes = sum(EVD_status == "Confirmé"),
+    adm_suspects = adm_total - adm_confirmes,
+    adm_moins_15 = sum(age_years < 15, na.rm = TRUE),
+    .by = adm_period
+  ) |>
+  tidyr::pivot_longer(
+    -adm_period,
+    names_to = "row",
+    values_to = "n"
+  ) |>
+  dplyr::rename(period = adm_period)
+
+exit_counts <- kit_adm |>
+  dplyr::filter(
+    !is.na(exit_type),
+    !is.na(exit_period),
+    exit_period != current_period
+  ) |>
+  dplyr::mutate(
+    row = dplyr::if_else(
+      exit_type == "deces_confirme",
+      paste0(exit_type, "_", death_delay),
+      exit_type
+    )
+  ) |>
+  dplyr::count(period = exit_period, row)
+
+# transferred has no category in type_of_exit, so it stays at zero
+exit_rows <- c(
+  "gueri",
+  "sortie_non_cas",
+  "transfere",
+  "perdu_de_vue",
+  "deces_confirme_moins_24h",
+  "deces_confirme_plus_24h",
+  "deces_non_cas",
+  "deces_suspect"
+)
+adm_rows <- c("adm_confirmes", "adm_suspects", "adm_moins_15")
+
+kit_grid <- tidyr::expand_grid(
+  row = c(adm_rows, exit_rows),
+  period = period_levels
+)
+n_grid <- nrow(kit_grid)
+
+kit_grid <- kit_grid |>
+  dplyr::left_join(
+    dplyr::bind_rows(adm_counts, exit_counts),
+    by = dplyr::join_by(row, period),
+    relationship = "one-to-one"
+  ) |>
+  dplyr::mutate(n = dplyr::coalesce(n, 0L))
+
+cat("Grid rows before / after join:", n_grid, "/", nrow(kit_grid), "\n")
+
+kit_totals <- dplyr::bind_rows(
+  adm_counts |> dplyr::filter(row == "adm_total"),
+  kit_grid |>
+    dplyr::filter(row %in% exit_rows) |>
+    dplyr::summarise(n = sum(n), row = "sortie_total", .by = period)
+)
+
+row_labels <- c(
+  adm_confirmes = "Admissions confirmées",
+  adm_suspects = "Admissions suspects",
+  adm_moins_15 = "Admissions < 15 ans",
+  gueri = "Sorties : guéris",
+  sortie_non_cas = "Sorties : non cas",
+  transfere = "Sorties : transférés",
+  perdu_de_vue = "Sorties : perdus de vue",
+  deces_confirme_moins_24h = "Décès confirmés < 24 h",
+  deces_confirme_plus_24h = "Décès confirmés > 24 h",
+  deces_non_cas = "Décès non cas",
+  deces_suspect = "Décès suspects",
+  adm_total = "Total admissions",
+  sortie_total = "Total sorties"
+)
+
+kit_summary <- dplyr::bind_rows(kit_grid, kit_totals) |>
+  dplyr::mutate(
+    row = factor(row, levels = names(row_labels), labels = row_labels),
+    period = factor(period, levels = period_levels)
+  ) |>
+  tidyr::pivot_wider(names_from = period, values_from = n) |>
+  dplyr::arrange(row) |>
+  dplyr::mutate(Total = rowSums(dplyr::pick(dplyr::all_of(period_levels))))
+
+kit_summary
+
+#* Word table ------------------------------------------------------------
+
+week_cols <- grep("^Oct S", period_levels, value = TRUE)
+
+kit_ft_data <- kit_summary |>
+  dplyr::mutate(
+    groupe = dplyr::case_when(
+      row %in% row_labels[adm_rows] ~ "Admissions",
+      row %in% row_labels[exit_rows] ~ "Sorties",
+      .default = "Totaux"
+    ),
+    row = as.character(row)
+  ) |>
+  dplyr::relocate(groupe)
+
+total_rows <- which(kit_ft_data$groupe == "Totaux")
+
+# counts quoted in the footnote, so they cannot drift from the table
+n_age_na <- sum(is.na(kit_adm$age_years) & !is.na(kit_adm$adm_period))
+n_adm_na <- sum(is.na(kit_adm$adm_period))
+n_exit_na <- sum(!is.na(kit_adm$exit_type) & is.na(kit_adm$exit_period))
+
+kit_ft <- flextable::flextable(kit_ft_data) |>
+  flextable::set_header_labels(
+    groupe = "",
+    row = "",
+    values = as.list(stats::setNames(sub("^Oct ", "", week_cols), week_cols))
+  ) |>
+  flextable::add_header_row(
+    values = c("", "Mois", "Octobre", ""),
+    colwidths = c(2, 3, length(week_cols), 1)
+  ) |>
+  flextable::merge_v(j = "groupe") |>
+  flextable::add_footer_lines(paste0(
+    "Données manquantes : âge inconnu pour ",
+    n_age_na,
+    " admission(s) (exclue(s) de « < 15 ans ») ; ",
+    n_adm_na,
+    " admission(s) et ",
+    n_exit_na,
+    " sortie(s) sans date valide sur la période (exclue(s))."
+  )) |>
+  flextable::theme_booktabs() |>
+  flextable::fontsize(size = 9, part = "all") |>
+  flextable::align(
+    j = c(period_levels, "Total"),
+    align = "center",
+    part = "all"
+  ) |>
+  flextable::bold(part = "header") |>
+  flextable::bold(i = total_rows) |>
+  flextable::bold(j = "Total") |>
+  flextable::bold(j = "groupe") |>
+  flextable::valign(j = "groupe", valign = "top") |>
+  flextable::hline(i = c(3, 11), border = officer::fp_border(width = 1)) |>
+  flextable::autofit()
+
+kit_ft
+
+saveRDS(kit_ft, fs::path(tables_dir, "kit_admissions_tbl.rds"))
+flextable::save_as_docx(
+  kit_ft,
+  path = fs::path(tables_dir, "kit_admissions_tbl.docx")
+)

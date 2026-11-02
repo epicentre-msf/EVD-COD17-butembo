@@ -9,10 +9,33 @@ server <- function(input, output, session) {
     place_filter = map_click
   )
 
+  # NULL for "all", so patients without a lab date are kept
+  iso_week_rng <- reactive({
+    wk <- input$iso_week %||% "all"
+    if (identical(wk, "all")) {
+      return(NULL)
+    }
+    as.Date(wk) + c(0, 6)
+  })
+
   # global period filter, on top of the sidebar/click filters, anchored to
   # the most recent lab result date in the data rather than Sys.Date()
   df_period <- reactive({
     d <- filter_data$df()
+    rng <- iso_week_rng()
+    if (!is.null(rng)) {
+      n_before <- nrow(d)
+      d <- dplyr::filter(
+        d,
+        date_lab_result_1 >= rng[1],
+        date_lab_result_1 <= rng[2]
+      )
+      message(
+        "iso week: kept ", nrow(d), " of ", n_before,
+        " rows (dropped those outside ", rng[1], " to ", rng[2],
+        " or without lab date)"
+      )
+    }
     per <- input$period %||% "total"
     if (identical(per, "total")) {
       return(d)
@@ -29,19 +52,34 @@ server <- function(input, output, session) {
 
   # lab samples follow the same period, anchored on their own latest result
   lab_period <- reactive({
+    lab <- lab_data
+    rng <- iso_week_rng()
+    if (!is.null(rng)) {
+      n_before <- nrow(lab)
+      lab <- dplyr::filter(
+        lab,
+        date_lab_result >= rng[1],
+        date_lab_result <= rng[2]
+      )
+      message(
+        "lab iso week: kept ", nrow(lab), " of ", n_before,
+        " samples (dropped those outside ", rng[1], " to ", rng[2],
+        " or without result date)"
+      )
+    }
     per <- input$period %||% "total"
     if (identical(per, "total")) {
-      return(lab_data)
+      return(lab)
     }
     n_days <- c(last_7d = 7, last_14d = 14, last_21d = 21)[[per]]
-    max_date <- max(lab_data$date_lab_result, na.rm = TRUE)
+    max_date <- max(lab$date_lab_result, na.rm = TRUE)
     out <- dplyr::filter(
-      lab_data,
+      lab,
       date_lab_result >= max_date - (n_days - 1)
     )
     message(
-      "lab period ", per, ": kept ", nrow(out), " of ", nrow(lab_data),
-      " samples (", sum(is.na(lab_data$date_lab_result)), " without result date)"
+      "lab period ", per, ": kept ", nrow(out), " of ", nrow(lab),
+      " samples (", sum(is.na(lab$date_lab_result)), " without result date)"
     )
     out
   })
