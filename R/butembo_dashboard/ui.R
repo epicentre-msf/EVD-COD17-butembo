@@ -182,12 +182,12 @@ ui <- page_navbar(
     value = "chains",
     mod_chains_vb_ui("chains_vb"),
     mod_chains_summary_ui("chains_summary"),
-    mod_contacts_ui(
-      "chains",
-      node_vars = chain_node_vars,
-      edge_vars = chain_edge_vars,
-      date_vars = date_vars
-    )
+    # mod_contacts_ui(
+    #   "chains",
+    #   node_vars = chain_node_vars,
+    #   edge_vars = chain_edge_vars,
+    #   date_vars = date_vars
+    # )
   ),
 
   mod_lab_ui("lab"),
