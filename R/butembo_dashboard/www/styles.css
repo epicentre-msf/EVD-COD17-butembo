@@ -79,6 +79,12 @@
 .vb-lab-positive { border-left: 6px solid #8b0000 !important; }
 .vb-lab-delay    { border-left: 6px solid #e09f3e !important; }
 .vb-lab-latest   { border-left: 6px solid #6a4c93 !important; }
+.vb-chain-linked { border-left: 6px solid #2a6f97 !important; }
+.vb-chain-mode   { border-left: 6px solid #3a9d8f !important; }
+.vb-chain-contact-known    { border-left: 6px solid #6baed6 !important; }
+.vb-chain-contact-followed { border-left: 6px solid #4d4d8f !important; }
+.vb-chain-3      { border-left: 6px solid #e09f3e !important; }
+.vb-chain-10     { border-left: 6px solid #9e2a2b !important; }
 
 /* ---- Place map (R/mod_map_place.R) ---- */
 /* hover tooltip is display-only; click-through avoids stealing mousemove

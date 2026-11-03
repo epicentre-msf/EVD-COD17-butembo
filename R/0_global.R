@@ -244,8 +244,9 @@ out_dir <- here::here("output")
 plots_dir <- fs::path(out_dir, "plots") # ggsave / tmap_save targets
 tables_dir <- fs::path(out_dir, "tables") # gt and reactable pngs, xlsx exports
 rds_dir <- fs::path(out_dir, "rds") # intermediates the report quotes
+kit_flux_dir <- fs::path(tables_dir, "kitatumba_flux") # weekly Kitatumba admissions/exits
 
-fs::dir_create(c(plots_dir, tables_dir, rds_dir))
+fs::dir_create(c(plots_dir, tables_dir, rds_dir, kit_flux_dir))
 
 #* Spatial data
 

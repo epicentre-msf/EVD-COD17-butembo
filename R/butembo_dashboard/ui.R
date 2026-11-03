@@ -152,31 +152,42 @@ ui <- page_navbar(
       title = "Courbes épidémiques stratifiées",
       value = "epicurve_hz",
       mod_epicurve_hz_ui("epicurve_hz", group_vars = group_vars)
+    ),
+    nav_panel(
+      title = "Délais",
+      value = "delays",
+      bslib::card(
+        full_screen = TRUE,
+        height = "80vh",
+        min_height = 600,
+        bslib::card_header("Délais entre événements clés"),
+        mod_delay_ui("delay")
+      )
+    ),
+    nav_panel(
+      title = "Répartition",
+      value = "breakdown",
+      mod_breakdown_ui("breakdown")
     )
   ),
 
   nav_panel(
-    title = "Formations sanitaires",
+    title = tags$span(bsicons::bs_icon("hospital"), "Formations sanitaires"),
     value = "facilities",
     mod_facilities_ui("facilities")
   ),
 
   nav_panel(
-    title = "Délais",
-    value = "delays",
-    bslib::card(
-      full_screen = TRUE,
-      height = "80vh",
-      min_height = 600,
-      bslib::card_header("Délais entre événements clés"),
-      mod_delay_ui("delay")
+    title = tags$span(bsicons::bs_icon("diagram-3"), "Transmission"),
+    value = "chains",
+    mod_chains_vb_ui("chains_vb"),
+    mod_chains_summary_ui("chains_summary"),
+    mod_contacts_ui(
+      "chains",
+      node_vars = chain_node_vars,
+      edge_vars = chain_edge_vars,
+      date_vars = date_vars
     )
-  ),
-
-  nav_panel(
-    title = "Répartition",
-    value = "breakdown",
-    mod_breakdown_ui("breakdown")
   ),
 
   mod_lab_ui("lab"),

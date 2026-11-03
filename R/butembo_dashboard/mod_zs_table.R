@@ -155,7 +155,11 @@ mod_zs_table_server <- function(id, df) {
         )
       }
       wk_cols <- purrr::map2(
-        paste0("S", lubridate::isoweek(weeks)),
+        paste0(
+          "S",
+          lubridate::isoweek(weeks),
+          c(rep("", length(weeks) - 1), " (en cours)")
+        ),
         wk_ids,
         wk_col
       ) |>

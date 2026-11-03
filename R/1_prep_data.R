@@ -69,6 +69,8 @@ ll_narr_clean <- ll_narr |>
     # squish first, so a whitespace-only cell counts as empty
     across(where(is.character), ~ na_if(str_squish(.x), "")),
     across(contains("date_"), harmonize_dates),
+    # a missing notification date falls back to the first lab result
+    date_notification = coalesce(date_notification, date_lab_result_1),
     # every yes/no field in the export is French. Recoded here, before any
     # comparison below reads one, so nothing downstream tests "Oui"
     across(
@@ -316,7 +318,7 @@ ll_narr_clean <- ll_narr |>
     transmission_type_1 = factor(
       case_match(
         transmission_type_1,
-        c(NA, "Inconnu") ~ "Unknown",
+        c(NA, "Inconnu") ~ "Inconnu",
         .default = transmission_type_1
       ),
       levels = c(
@@ -327,7 +329,7 @@ ll_narr_clean <- ll_narr |>
         "Soins au malade",
         "Visite occasionnelle",
         "Autre",
-        "Unknown"
+        "Inconnu"
       )
     )
   ) |>

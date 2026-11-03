@@ -6,6 +6,7 @@ suppressPackageStartupMessages(library(epishiny))
 suppressPackageStartupMessages(library(mapgl))
 suppressPackageStartupMessages(library(shinyjs))
 suppressPackageStartupMessages(library(reactable))
+suppressPackageStartupMessages(library(epishiny.contacts))
 
 # French month and day names for every highcharter chart
 options(
@@ -127,6 +128,57 @@ flow_locations <- hf_cases |>
 flow_edges <- hf_flows |>
   dplyr::transmute(origin = from, dest = to, count = n_cases) |>
   dplyr::filter(origin %in% flow_locations$id, dest %in% flow_locations$id)
+
+#* Transmission events ------------------------------------------------
+# nodes are keyed on unique_id so cases without a pid stay in the tab.
+# A pid shared by several unique_id cannot name an infector, so it is dropped.
+pid_to_uid <- but_ll |>
+  dplyr::distinct(pid, unique_id) |>
+  dplyr::filter(!is.na(pid)) |>
+  dplyr::filter(dplyr::n() == 1, .by = pid) |>
+  dplyr::rename(from_pid = pid, from_uid = unique_id)
+
+# one infector per infectee, set 1 first, as in R/transmission_chains.R
+n_events <- nrow(app_data$transmission_events)
+chain_events <- app_data$transmission_events |>
+  dplyr::filter(!is.na(from_pid), !is.na(to_unique_id))
+n_before <- nrow(chain_events)
+chain_events <- chain_events |>
+  dplyr::left_join(
+    pid_to_uid,
+    by = dplyr::join_by(from_pid),
+    relationship = "many-to-one"
+  )
+stopifnot("infector join changed N" = nrow(chain_events) == n_before)
+n_no_uid <- sum(is.na(chain_events$from_uid))
+chain_events <- chain_events |>
+  dplyr::filter(!is.na(from_uid)) |>
+  dplyr::rename(to_uid = to_unique_id) |>
+  dplyr::arrange(to_uid, transmission_set) |>
+  dplyr::slice(1, .by = to_uid) |>
+  dplyr::mutate(
+    transmission_type = dplyr::if_else(
+      is.na(transmission_type) | transmission_type == "Inconnu",
+      "Unknown",
+      transmission_type
+    )
+  ) |>
+  dplyr::select(
+    from_uid,
+    to_uid,
+    transmission_type,
+    chain_name,
+    transmission_set
+  )
+message(
+  "chain events: kept ",
+  nrow(chain_events),
+  " of ",
+  n_events,
+  " (dropped: no from pid or to id; ",
+  n_no_uid,
+  " infector pid not matching one case; second infectors)"
+)
 
 quality <- app_data$quality
 
@@ -322,6 +374,34 @@ source("mod_vb.R")
 
 # lab tab: value boxes + samples curve, reuses the vb_* helpers above
 source("mod_lab.R")
+
+# transmission tab: value boxes, reuses the vb_* helpers above
+source("mod_chains_vb.R")
+source("mod_chains_summary.R")
+
+# transmission network: local module with fixed sizes and a short tooltip
+source("mod_contacts.R")
+chain_node_vars <- c(
+  group_vars[c("Sexe", "Issue", "Isolé", "Décédé à la notification")],
+  "Statut EVD" = "EVD_status",
+  group_vars["Infection locale"]
+)
+chain_edge_vars <- c(
+  "Type de transmission" = "transmission_type",
+  "Chaîne" = "chain_name"
+)
+# "id" is the node id, which epicontacts renames from unique_id
+chain_tooltip_vars <- c(
+  "Identifiant" = "id",
+  "Âge" = "age",
+  "Unité d'âge" = "age_unit",
+  "Sexe" = "sex",
+  "Isolé" = "isolated",
+  "Zone de santé (résidence)" = "adm2_name__res",
+  "Aire de santé (résidence)" = "adm3_name__res",
+  "Issue" = "type_of_exit",
+  "Statut EVD" = "EVD_status"
+)
 
 # place (map) module
 source("mod_map_place.R")
