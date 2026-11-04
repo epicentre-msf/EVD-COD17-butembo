@@ -315,6 +315,28 @@ ll_narr_clean <- ll_narr |>
       levels = c("Yes", "No")
     ),
 
+    # accent-stripped so "Pré-Traité" and "Pre-Traite" both match
+    narrative_status = chartr("éè", "ee", tolower(str_squish(narratif))),
+    narrative_status = factor(
+      case_when(
+        is.na(narrative_status) |
+          narrative_status %in% c("pas dispo", "missing") ~
+          "Narratif non disponible",
+        narrative_status == "pas lu" ~ "Narratifs disponibles (non entrés)",
+        # "lu - peu détaillé" with whatever dash the export uses
+        narrative_status == "pre-traite" |
+          str_detect(narrative_status, "^lu($|\\s*[-–—]\\s*peu detaill)") ~
+          "Narratifs entrés",
+        # unmatched spellings are counted below, not hidden in a level
+        .default = NA_character_
+      ),
+      levels = c(
+        "Narratifs entrés",
+        "Narratifs disponibles (non entrés)",
+        "Narratif non disponible"
+      )
+    ),
+
     transmission_type_1 = factor(
       case_match(
         transmission_type_1,
@@ -340,6 +362,15 @@ ll_narr_clean <- ll_narr |>
   mutate(unique_id = sprintf("BUT-%04d", cur_group_id()), .by = id_key) |>
   select(-id_key) |>
   relocate(unique_id)
+
+n_narr_unmatched <- sum(
+  is.na(ll_narr_clean$narrative_status) &
+    !is.na(ll_narr_clean$narratif) &
+    !tolower(str_squish(ll_narr_clean$narratif)) %in% c("pas dispo", "missing")
+)
+if (n_narr_unmatched > 0) {
+  cli::cli_alert_warning("{n_narr_unmatched} narratif values not recognised")
+}
 
 #! Export the linelist: Donnees/ in sharepoint
 if (EXPORT_TO_SHAREPOINT) {

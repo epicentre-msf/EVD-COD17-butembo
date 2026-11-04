@@ -68,6 +68,7 @@ app_data <- readRDS(app_data_path)
 # Linelist data
 but_ll <- app_data$linelist
 
+
 # one row per recorded health-facility visit, and the FOSA layer to map them
 hf_visits <- app_data$hf_visits
 
@@ -313,7 +314,8 @@ group_vars <- c(
   "Décédé à la notification" = "dead_upon_notif_grp",
   "Issue" = "type_of_exit",
   "Infection locale" = "infection_butembo",
-  "Infector identifié" = "infector_identified"
+  "Infector identifié" = "infector_identified",
+  "Narratifs" = "narrative_status"
 )
 
 # an "Unknown" level would take a positional epicurve colour; as NA, epishiny
@@ -483,6 +485,11 @@ group_pals <- list(
     "60+" = "#002115"
   ),
   isolated = c("Yes" = "#2a6f97", "No" = "#9e2a2b"),
+  narrative_status = c(
+    "Narratifs entrés" = "#3a9d8f",
+    "Narratifs disponibles (non entrés)" = "#e09f3e",
+    "Narratif non disponible" = "#9e2a2b"
+  ),
   dead_out_isolation = c(
     "Yes" = "#9e2a2b",
     "No" = "#2a6f97",

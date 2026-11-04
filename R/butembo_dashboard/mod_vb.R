@@ -1,5 +1,5 @@
 # Value boxes above the dashboard: confirmed cases (with MSF caseload), notification status,
-# deaths (with non-isolated split), cases investigated.
+# deaths (with non-isolated split), narratives entered.
 
 mod_vb_ui <- function(id) {
   ns <- NS(id)
@@ -46,12 +46,11 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "Cas investigués",
+        "Narratifs",
         paste0(
-          "Est investigué tout cas disposant d'un récit.<br>",
-          "Finalisé : récit lu et entièrement encodé dans la base.<br>",
-          "En cours : informations clés du récit encodées dans la base.<br>",
-          "En attente : récit disponible mais non lu."
+          "Entrés : récit pré-traité ou lu (y compris « lu - peu détaillé »).<br>",
+          "Disponibles (non entrés) : récit disponible mais pas encore lu.<br>",
+          "Non disponibles : pas de récit."
         )
       ),
       value = textOutput(ns("narr_final"), inline = TRUE),
@@ -99,29 +98,13 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
         na.rm = TRUE
       )
 
-      # accent-stripped so "Pre-Traité" and "Pre-Traite" both match
-      narr <- chartr("éè", "ee", tolower(stringr::str_squish(d$narratif)))
-      investigated <- !(is.na(narr) | narr %in% c("pas dispo", "missing"))
-      # "Lu - peu détaillé" counts as read too, whatever dash the export uses
-      investigation_status <- dplyr::case_when(
-        !investigated ~ NA_character_,
-        stringr::str_detect(narr, "^lu($|\\s*[-–—]\\s*peu detaill)") ~
-          "Finalised",
-        narr == "pre-traite" ~ "Been process",
-        narr == "pas lu" ~ "Pending",
-        .default = "Unrecognised"
-      )
-      n_unrecognised <- sum(investigation_status %in% "Unrecognised")
-      if (n_unrecognised > 0) {
-        message(n_unrecognised, " narratif values not recognised")
-      }
-
       list(
         n_all = nrow(d),
-        n_investigated = sum(investigated),
-        n_finalised = sum(investigation_status %in% "Finalised"),
-        n_in_process = sum(investigation_status %in% "Been process"),
-        n_pending = sum(investigation_status %in% "Pending"),
+        n_narr_entered = sum(d$narrative_status %in% "Narratifs entrés"),
+        n_narr_available = sum(
+          d$narrative_status %in% "Narratifs disponibles (non entrés)"
+        ),
+        n_narr_missing = sum(d$narrative_status %in% "Narratif non disponible"),
         n_confirmed = n_confirmed,
         n_alive_notif = n_alive_notif,
         n_msf = n_msf,
@@ -235,9 +218,9 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$narr_final <- renderText({
       s <- df_summary()
       paste0(
-        scales::number(s$n_investigated),
+        scales::number(s$n_narr_entered),
         " (",
-        vb_pct(s$n_investigated, s$n_all),
+        vb_pct(s$n_narr_entered, s$n_all),
         ")"
       )
     })
@@ -246,29 +229,20 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Finalisés",
+          label = "Disponibles (non entrés)",
           value = paste0(
-            scales::number(s$n_finalised),
+            scales::number(s$n_narr_available),
             " (",
-            vb_pct(s$n_finalised, s$n_investigated),
+            vb_pct(s$n_narr_available, s$n_all),
             ")"
           )
         ),
         list(
-          label = "En cours",
+          label = "Non disponibles",
           value = paste0(
-            scales::number(s$n_in_process),
+            scales::number(s$n_narr_missing),
             " (",
-            vb_pct(s$n_in_process, s$n_investigated),
-            ")"
-          )
-        ),
-        list(
-          label = "En attente",
-          value = paste0(
-            scales::number(s$n_pending),
-            " (",
-            vb_pct(s$n_pending, s$n_investigated),
+            vb_pct(s$n_narr_missing, s$n_all),
             ")"
           )
         )
