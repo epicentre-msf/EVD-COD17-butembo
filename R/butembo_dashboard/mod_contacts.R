@@ -92,7 +92,8 @@ mod_contacts_ui <- function(
 # df: one row per node; contact_df: one row per link. tooltip_vars: named
 # vector, label = node column. "id" is the node id, whatever id_var was called.
 # Sizes are c(undated, dated): a dated x-axis crowds the network.
-# height is a CSS size for the plot, per view.
+# height is a CSS size for the plot, per view; coord_height is the dated
+# layout's y extent in px, which sets how far apart nodes sit.
 mod_contacts_server <- function(
   id,
   df,
@@ -102,11 +103,12 @@ mod_contacts_server <- function(
   to_var,
   node_vars,
   tooltip_vars,
-  node_size = c(18, 10),
+  node_size = c(18, 6),
   edge_width = c(6, 3),
   n_date_break = 10,
   node_shape = "sex",
-  height = c(undated = "80vh", dated = "130vh")
+  height = c(undated = "80vh", dated = "180vh"),
+  coord_height = "2200px"
 ) {
   moduleServer(id, function(input, output, session) {
     observeEvent(input$toggle_sidebar, {
@@ -161,7 +163,8 @@ mod_contacts_server <- function(
         edge_width = edge_width[[if (dated) 2 else 1]],
         network_shape = "rectangle",
         n_date_break = n_date_break,
-        tooltip_vars = tooltip_vars
+        tooltip_vars = tooltip_vars,
+        coord_height = coord_height
       )
     })
 
@@ -195,7 +198,8 @@ contacts_plot <- function(
   edge_width,
   network_shape,
   n_date_break,
-  tooltip_vars
+  tooltip_vars,
+  coord_height
 ) {
   # annot = NULL: the default tooltip lists every column, replaced below
   vis <- plot(
@@ -214,7 +218,9 @@ contacts_plot <- function(
     n_break = n_date_break,
     position_dodge = TRUE,
     selector = FALSE,
-    annot = NULL
+    annot = NULL,
+    # also the y extent of the layout in epicontacts: taller spreads dated nodes apart
+    height = if (is.null(x_axis)) "700px" else coord_height
   )
 
   parts <- lapply(seq_along(tooltip_vars), \(i) {

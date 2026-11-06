@@ -206,12 +206,12 @@ server <- function(input, output, session) {
     d
   })
 
-  # chain_contacts <- shiny::reactive({
-  #   ids <- chain_ll()$unique_id
-  #   out <- dplyr::filter(chain_events, from_uid %in% ids, to_uid %in% ids)
-  #   message("chains: ", nrow(out), " of ", nrow(chain_events), " edges kept")
-  #   out
-  # })
+  chain_contacts <- shiny::reactive({
+    ids <- chain_ll()$unique_id
+    out <- dplyr::filter(chain_events, from_uid %in% ids, to_uid %in% ids)
+    message("chains: ", nrow(out), " of ", nrow(chain_events), " edges kept")
+    out
+  })
 
   mod_chains_vb_server(
     "chains_vb",
@@ -220,16 +220,16 @@ server <- function(input, output, session) {
 
   mod_chains_summary_server("chains_summary", ll = chain_ll)
 
-  # mod_contacts_server(
-  #   "chains",
-  #   df = chain_ll,
-  #   contact_df = chain_contacts,
-  #   id_var = "unique_id",
-  #   from_var = "from_uid",
-  #   to_var = "to_uid",
-  #   node_vars = chain_node_vars,
-  #   tooltip_vars = chain_tooltip_vars
-  # )
+  mod_contacts_server(
+    "chains",
+    df = chain_ll,
+    contact_df = chain_contacts,
+    id_var = "unique_id",
+    from_var = "from_uid",
+    to_var = "to_uid",
+    node_vars = chain_node_vars,
+    tooltip_vars = chain_tooltip_vars
+  )
 
   mod_quality_server("quality", quality = quality)
 
