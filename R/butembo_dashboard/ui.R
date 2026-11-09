@@ -182,14 +182,14 @@ ui <- page_navbar(
     value = "chains",
     mod_chains_vb_ui("chains_vb"),
     layout_columns(
-      col_widths = c(7, 5),
+      col_widths = 12,
       fill = FALSE,
-      mod_contacts_ui(
-        "chains",
-        node_vars = chain_node_vars,
-        edge_vars = chain_edge_vars,
-        date_vars = date_vars
-      ),
+      # mod_contacts_ui(
+        # "chains",
+        # node_vars = chain_node_vars,
+        # edge_vars = chain_edge_vars,
+        # date_vars = date_vars
+      # ),
       mod_chains_summary_ui("chains_summary")
     )
   ),

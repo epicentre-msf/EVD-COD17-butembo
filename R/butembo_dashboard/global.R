@@ -6,7 +6,7 @@ suppressPackageStartupMessages(library(epishiny))
 suppressPackageStartupMessages(library(mapgl))
 suppressPackageStartupMessages(library(shinyjs))
 suppressPackageStartupMessages(library(reactable))
-suppressPackageStartupMessages(library(epishiny.contacts))
+# suppressPackageStartupMessages(library(epishiny.contacts))
 
 # French month and day names for every highcharter chart
 options(
@@ -382,30 +382,30 @@ source("mod_chains_vb.R")
 source("mod_chains_summary.R")
 
 # transmission network: local module with fixed sizes and a short tooltip
-source("mod_contacts.R")
-chain_node_vars <- c(
-  group_vars[c("Sexe", "Issue", "Isolé", "Décédé à la notification")],
-  "Statut EVD" = "EVD_status",
-  group_vars["Infection locale"]
-)
-chain_edge_vars <- c(
-  "Type de transmission" = "transmission_type",
-  "Chaîne" = "chain_name"
-)
+# source("mod_contacts.R")
+# chain_node_vars <- c(
+# group_vars[c("Sexe", "Issue", "Isolé", "Décédé à la notification")],
+# "Statut EVD" = "EVD_status",
+# group_vars["Infection locale"]
+# )
+# chain_edge_vars <- c(
+# "Type de transmission" = "transmission_type",
+# "Chaîne" = "chain_name"
+# )
 # "id" is the node id, which epicontacts renames from unique_id
-chain_tooltip_vars <- c(
-  "Identifiant" = "id",
-  "Âge" = "age",
-  "Unité d'âge" = "age_unit",
-  "Sexe" = "sex",
-  "Isolé" = "isolated",
-  "Zone de santé (résidence)" = "adm2_name__res",
-  "Aire de santé (résidence)" = "adm3_name__res",
-  "Issue" = "type_of_exit",
-  "Statut EVD" = "EVD_status",
-  "Date de début des symptômes" = "date_symptom_onset",
-  "Date de confirmation labo" = "date_lab_result_1"
-)
+# chain_tooltip_vars <- c(
+# "Identifiant" = "id",
+# "Âge" = "age",
+# "Unité d'âge" = "age_unit",
+# "Sexe" = "sex",
+# "Isolé" = "isolated",
+# "Zone de santé (résidence)" = "adm2_name__res",
+# "Aire de santé (résidence)" = "adm3_name__res",
+# "Issue" = "type_of_exit",
+# "Statut EVD" = "EVD_status",
+# "Date de début des symptômes" = "date_symptom_onset",
+# "Date de confirmation labo" = "date_lab_result_1"
+# )
 
 # place (map) module
 source("mod_map_place.R")
@@ -534,7 +534,7 @@ group_pals <- list(
     "Ecouvillon oral" = "#6d85b6",
     "Lait Maternel" = "#e09f3e"
   )
-  # isolation_site_id (70 levels) left to epishiny's pal20 fallback
+# isolation_site_id (70 levels) left to epishiny's pal20 fallback
 )
 
 # colours for the levels of `var`, named; unmapped levels fall back to pal20
