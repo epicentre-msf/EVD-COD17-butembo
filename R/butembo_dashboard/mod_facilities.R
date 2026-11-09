@@ -497,7 +497,8 @@ mod_facilities_server <- function(
           visit,
           HF_name_visited = hf_name,
           date_start_HF_visited,
-          date_end_HF_visited
+          date_end_HF_visited,
+          HF_type_visited = visit_type
         ) |>
         tidyr::pivot_wider(
           names_from = visit,
@@ -505,7 +506,8 @@ mod_facilities_server <- function(
           values_from = c(
             HF_name_visited,
             date_start_HF_visited,
-            date_end_HF_visited
+            date_end_HF_visited,
+            HF_type_visited
           )
         )
 

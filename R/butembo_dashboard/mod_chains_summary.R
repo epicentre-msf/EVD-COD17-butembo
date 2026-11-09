@@ -1,14 +1,34 @@
-# Transmission tab, under the value boxes: bar chart of the mode of infection
-# and table of the place of transmission, both on the filtered cases.
+# Transmission tab, right column: epicurve by narrative status, then tabs for
+# mode of infection, exposures and place of transmission, on the filtered cases.
 
 mod_chains_summary_ui <- function(id) {
   ns <- NS(id)
+  # one column: the curve on top, the other analyses under it
+  # two equal rows that together fill whatever height the network card takes
   bslib::layout_columns(
-    col_widths = c(6, 6),
-    fill = FALSE,
+    col_widths = 12,
+    row_heights = c(1, 1),
+    min_height = "600px",
+    # time_ui / time_server and the recolour handler come from the main epicurve
+    bslib::layout_columns(
+      col_widths = 12,
+      do.call(
+        time_ui,
+        c(
+          list(
+            id = ns("curve"),
+            title = "Courbe épidémique",
+            date_vars = date_vars,
+            group_vars = group_vars,
+            date_interval_default = "week",
+            group_var_default = "narrative_status"
+          ),
+          time_ui_labs
+        )
+      )
+    ),
     bslib::navset_card_tab(
       full_screen = TRUE,
-      height = "380px",
       bslib::nav_panel(
         "Type de transmission",
         shiny::uiOutput(ns("type_note")),
@@ -18,14 +38,12 @@ mod_chains_summary_ui <- function(id) {
         "Expositions",
         shiny::uiOutput(ns("expo_note")),
         highcharter::highchartOutput(ns("expo_chart"), height = "100%")
+      ),
+      bslib::nav_panel(
+        "Formation sanitaire de transmission",
+        shiny::uiOutput(ns("place_note")),
+        reactable::reactableOutput(ns("place_tbl"))
       )
-    ),
-    bslib::card(
-      full_screen = TRUE,
-      height = "380px",
-      bslib::card_header("Formation sanitaire de transmission"),
-      shiny::uiOutput(ns("place_note")),
-      reactable::reactableOutput(ns("place_tbl"))
     )
   )
 }
@@ -42,6 +60,40 @@ exposure_vars <- c(
 
 mod_chains_summary_server <- function(id, ll) {
   moduleServer(id, function(input, output, session) {
+    time_server(
+      id = "curve",
+      df = ll,
+      date_vars = date_vars,
+      group_vars = group_vars,
+      group_pal = evd_pal,
+      na_colour = na_col
+    )
+
+    # same palette handling as the main curve, scoped to this module's chart
+    observeEvent(input[["curve-group"]], {
+      grp <- input[["curve-group"]]
+      session$sendCustomMessage(
+        "recolour",
+        list(
+          id = session$ns("curve-chart"),
+          na_col = na_col,
+          palette = as.list(c(
+            group_pals[[grp]][!names(group_pals[[grp]]) %in% na_labels],
+            setNames(
+              rep(na_col, length(na_labels) + 1),
+              c(getOption("epishiny.na.label"), na_labels)
+            )
+          ))
+        )
+      )
+    })
+
+    # epishiny has no default-date arg, so set it once on startup
+    observe({
+      updateSelectInput(session, "curve-date", selected = "date_lab_result_1")
+    }) |>
+      bindEvent(TRUE, once = TRUE)
+
     n_missing_note <- \(n_out, n_all, what) {
       htmltools::div(
         class = "card-disclaimer",

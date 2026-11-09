@@ -16,18 +16,13 @@ mod_chains_vb_ui <- function(id, since = CHAINS_CONFIRMED_SINCE) {
         paste0(
           "Cas dont le nom de l'infecteur est renseigné.<br>",
           "Un seul infecteur par cas ; pourcentage sur les cas filtrés.<br>",
-          "Seconde ligne : cas confirmés (labo) depuis le ",
+          "Ligne du bas : parmi les cas confirmés (labo) depuis le ",
           format(since, "%d/%m/%Y"),
           "."
         )
       ),
-      value = tagList(
-        textOutput(ns("linked"), inline = TRUE),
-        tags$div(
-          class = "fs-6 fw-normal",
-          textOutput(ns("linked_confirmed"), inline = TRUE)
-        )
-      ),
+      value = textOutput(ns("linked"), inline = TRUE),
+      p(uiOutput(ns("linked_confirmed"), inline = TRUE)),
       showcase_layout = "left center",
       class = "vb-accent vb-chain-linked",
       height = "85px"
@@ -91,13 +86,15 @@ mod_chains_vb_server <- function(id, ll) {
 
     output$linked <- renderText(n_pct(stats()$n_linked, stats()$n))
 
-    output$linked_confirmed <- renderText(
-      paste0(
-        n_pct(stats()$n_recent_linked, stats()$n_recent),
-        " confirmés depuis le ",
-        format(CHAINS_CONFIRMED_SINCE, "%d/%m")
-      )
-    )
+    output$linked_confirmed <- renderUI({
+      vb_stat_line(list(list(
+        label = paste0(
+          "Confirmés depuis le ",
+          format(CHAINS_CONFIRMED_SINCE, "%d/%m")
+        ),
+        value = n_pct(stats()$n_recent_linked, stats()$n_recent)
+      )))
+    })
 
     output$mode <- renderText(n_pct(stats()$n_mode, stats()$n))
 

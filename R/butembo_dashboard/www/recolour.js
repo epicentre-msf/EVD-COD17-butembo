@@ -1,18 +1,20 @@
 // epishiny fixes the epicurve palette; recolour series by name after each render
 (function () {
-  var palette = {};
+  // one palette per chart output id, since several epicurves can be on screen
+  var palettes = {};
+  var chartIds = ["curve-chart", "chains_summary-curve-chart"];
   var naCol = "#bdbdbd";
   // any no-value series name, whatever the grouping variable spells it
   var naRe = /^\(?\s*(unknown|inconnu|missing|manquant|not applicable|non applicable|n\/a|na)\s*\)?$/i;
   // epishiny's shared tooltip has no total and shows a raw date for weekly bars
-  function patchTooltip(chart) {
+  function patchTooltip(chart, id) {
     if (chart._tipPatched) return;
     chart._tipPatched = true;
     chart.update({
       tooltip: {
         shared: true,
         formatter: function () {
-          var iv = Shiny.shinyapp && Shiny.shinyapp.$inputValues["curve-date_interval"];
+          var iv = Shiny.shinyapp && Shiny.shinyapp.$inputValues[id.replace(/-chart$/, "-date_interval")];
           var head = String(iv).toLowerCase() === "week"
             ? "S" + new Date(this.x).getWeek()
             : Highcharts.dateFormat("%e %b %Y", this.x);
@@ -32,8 +34,9 @@
     }, false);
   }
   // only touches series whose colour differs, so the render hook below cannot loop
-  function paint(chart) {
-    patchTooltip(chart);
+  function paint(chart, id) {
+    var palette = palettes[id] || {};
+    patchTooltip(chart, id);
     var changed = false;
     chart.series.forEach(function (s) {
       var name = String(s.name).trim();
@@ -73,7 +76,7 @@
       if (tries > 0) setTimeout(function () { apply(id, tries - 1); }, 150);
       return;
     }
-    paint(chart);
+    paint(chart, id);
   }
   // epishiny updates series through a highcharter proxy on filter changes, which
   // fires neither shiny:value nor the recolour message; repaint after each render
@@ -84,15 +87,16 @@
     hooked = true;
     // "render" also covers the first draw, which never fires "redraw"
     Highcharts.addEvent(Highcharts.Chart, "render", function () {
-      if (this.renderTo && this.renderTo.closest("#curve-chart")) paint(this);
+      var host = this.renderTo && this.renderTo.closest("[id$='-chart']");
+      if (host && chartIds.indexOf(host.id) > -1) paint(this, host.id);
     });
   }
   Shiny.addCustomMessageHandler("recolour", function (msg) {
-    palette = msg.palette || {};
+    palettes[msg.id] = msg.palette || {};
     naCol = msg.na_col || naCol;
     apply(msg.id, 10);
   });
   $(document).on("shiny:value", function (e) {
-    if (e.name === "curve-chart") setTimeout(function () { apply("curve-chart", 10); }, 200);
+    if (chartIds.indexOf(e.name) > -1) setTimeout(function () { apply(e.name, 10); }, 200);
   });
 })();

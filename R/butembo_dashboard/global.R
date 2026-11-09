@@ -402,7 +402,9 @@ chain_tooltip_vars <- c(
   "Zone de santé (résidence)" = "adm2_name__res",
   "Aire de santé (résidence)" = "adm3_name__res",
   "Issue" = "type_of_exit",
-  "Statut EVD" = "EVD_status"
+  "Statut EVD" = "EVD_status",
+  "Date de début des symptômes" = "date_symptom_onset",
+  "Date de confirmation labo" = "date_lab_result_1"
 )
 
 # place (map) module

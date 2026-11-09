@@ -24,17 +24,50 @@ mod_timeline_ui <- function(
     rlang::check_installed(pkg_deps, reason = "to use the timeline module.")
   }
 
-  inputs_ui <- shiny::tagList(
+  # lives above the chart, not in the options sidebar: these are the main filters
+  filters_ui <- htmltools::tags$div(
+    class = "tl-filters d-flex flex-wrap align-items-end gap-3",
+    htmltools::tags$style(
+      ".tl-filters .form-group { margin-bottom: 0; }
+       .datepicker-dropdown { z-index: 2000 !important; }"
+    ),
     shinyWidgets::pickerInput(
       ns("facility"),
       facility_lab,
       choices = character(0),
       multiple = FALSE,
+      width = "280px",
       options = shinyWidgets::pickerOptions(
         liveSearch = TRUE,
+        # body, so the card's overflow cannot clip the list
+        container = "body",
         noneSelectedText = "Toutes les formations sanitaires"
       )
     ),
+    shiny::dateRangeInput(
+      ns("daterange"),
+      "Période (cas présents sur ces dates)",
+      language = "fr",
+      weekstart = 1,
+      format = "dd/mm/yyyy",
+      separator = " au ",
+      width = "300px"
+    ),
+    shinyWidgets::radioGroupButtons(
+      ns("preset"),
+      "Raccourcis",
+      choices = c(
+        "7 j" = "7",
+        "14 j" = "14",
+        "30 j" = "30",
+        "Tout" = "all"
+      ),
+      selected = "30",
+      size = "sm"
+    )
+  )
+
+  inputs_ui <- shiny::tagList(
     shinyWidgets::pickerInput(
       ns("cases"),
       cases_lab,
@@ -78,6 +111,11 @@ mod_timeline_ui <- function(
       )
     ),
     bslib::card_body(
+      fill = FALSE,
+      class = "pb-0",
+      filters_ui
+    ),
+    bslib::card_body(
       padding = 0,
       bslib::layout_sidebar(
         padding = 0,
@@ -115,16 +153,21 @@ mod_timeline_server <- function(
   outcome_var = "type_of_exit",
   outcome_levels = c("Recovered", "Died"),
   male_values = c("Male", "M", "Homme", "H"),
+  female_values = c("Female", "F", "Femme"),
   hf_name_pattern = "HF_name_visited",
   hf_start_pattern = "date_start_HF_visited",
   hf_end_pattern = "date_end_HF_visited",
+  hf_type_pattern = "HF_type_visited",
   disease_col = "#f2b0b0",
+  pending_col = "#7b4fa3",
+  isolation_col = "#3a9d8f",
   incubation_col = "#ffe6cc",
   onset_col = "darkred",
   recovered_col = group_pals$type_of_exit[["Recovered"]],
   died_col = group_pals$type_of_exit[["Died"]],
   recovered_value = "Recovered",
-  default_n = 10
+  default_n = 10,
+  default_facility = "wanamahika"
 ) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -148,12 +191,9 @@ mod_timeline_server <- function(
     cases_dat <- shiny::reactive({
       show_agesex <- isTRUE(input$show_agesex)
       df_mod() |>
-        # cases without both dates or a final outcome cannot be drawn
-        dplyr::filter(
-          .data[[outcome_var]] %in% outcome_levels,
-          !is.na(.data[[date_onset]]),
-          !is.na(.data[[date_exit]])
-        ) |>
+        # no onset, no bar. Cases without a settled exit stay, drawn up to
+        # their last known day in care
+        dplyr::filter(!is.na(.data[[date_onset]])) |>
         dplyr::transmute(
           .id = as.character(.data[[id_var]]),
           name = .id,
@@ -164,7 +204,16 @@ mod_timeline_server <- function(
           date_exit = as.Date(.data[[date_exit]])
         ) |>
         dplyr::mutate(
-          sex_age = paste0(dplyr::if_else(sex %in% male_values, "M", "F"), age),
+          # settled = a final outcome and a date for it
+          resolved = outcome %in% outcome_levels & !is.na(date_exit),
+          date_exit = dplyr::if_else(resolved, date_exit, as.Date(NA)),
+          # anything else, including NA, is unknown: not a default female
+          sex_letter = dplyr::case_when(
+            sex %in% male_values ~ "M",
+            sex %in% female_values ~ "F",
+            .default = "?"
+          ),
+          sex_age = paste0(sex_letter, dplyr::coalesce(as.character(age), "?")),
           label = if (show_agesex) paste0(name, " (", sex_age, ")") else name,
           onset_end = date_onset + 1,
           exit_end = date_exit + 1
@@ -178,7 +227,8 @@ mod_timeline_server <- function(
           dplyr::all_of(id_var),
           dplyr::contains(hf_name_pattern),
           dplyr::contains(hf_start_pattern),
-          dplyr::contains(hf_end_pattern)
+          dplyr::contains(hf_end_pattern),
+          dplyr::contains(hf_type_pattern)
         ) |>
         dplyr::rename(.id = dplyr::all_of(id_var)) |>
         dplyr::mutate(dplyr::across(-.id, as.character)) |>
@@ -209,7 +259,8 @@ mod_timeline_server <- function(
             \(w) paste(stringr::str_to_upper(stringr::str_sub(w, 1, 1)), collapse = "")
           ),
           hf_start = as.Date(.data[[hf_start_pattern]]),
-          hf_end_raw = as.Date(.data[[hf_end_pattern]])
+          hf_end_raw = as.Date(.data[[hf_end_pattern]]),
+          is_isolation = .data[[hf_type_pattern]] %in% "isolation"
         ) |>
         # a visit without a start date cannot be placed on the axis
         dplyr::filter(!is.na(hf_start))
@@ -228,24 +279,95 @@ mod_timeline_server <- function(
         dplyr::mutate(
           hf_end = dplyr::case_when(
             !is.na(hf_end_raw) & hf_end_raw >= hf_start ~ hf_end_raw + 1,
-            is_last_visit ~ exit_end,
+            is_last_visit & !is.na(exit_end) ~ exit_end,
             .default = hf_start + 1
           )
         )
     })
 
+    # first and last day each case is on record, from onset, exit and visits
+    case_span <- shiny::reactive({
+      v <- visits_dat() |>
+        dplyr::summarise(
+          .by = .id,
+          v_start = min(hf_start),
+          v_end = max(hf_end)
+        )
+      cases_dat() |>
+        dplyr::left_join(
+          v,
+          by = dplyr::join_by(.id),
+          relationship = "one-to-one"
+        ) |>
+        dplyr::mutate(
+          span_start = pmin(date_onset, v_start, na.rm = TRUE),
+          # exclusive ends, so the last day on record is span_end - 1
+          span_last = pmax(exit_end, v_end, onset_end, na.rm = TRUE) - 1
+        ) |>
+        dplyr::select(.id, span_start, span_last)
+    })
+
+    extent <- shiny::reactive({
+      sp <- case_span()
+      shiny::req(nrow(sp) > 0)
+      c(min(sp$span_start), max(sp$span_last))
+    })
+
+    # presets count back from the latest date on record, not from today
+    shiny::observeEvent(list(input$preset, extent()), {
+      e <- extent()
+      from <- if (identical(input$preset, "all")) {
+        e[[1]]
+      } else {
+        max(e[[1]], e[[2]] - as.integer(input$preset) + 1L)
+      }
+      shiny::updateDateRangeInput(
+        session,
+        "daterange",
+        start = from,
+        end = e[[2]],
+        min = e[[1]],
+        max = e[[2]]
+      )
+    })
+
+    # a case counts when its stay overlaps the range at all
+    range_ids <- shiny::reactive({
+      sp <- case_span()
+      r <- input$daterange
+      if (is.null(r) || anyNA(r)) {
+        return(sp$.id)
+      }
+      sp$.id[sp$span_start <= r[[2]] & sp$span_last >= r[[1]]]
+    })
+
+    date_filter_active <- shiny::reactive({
+      r <- input$daterange
+      !is.null(r) && !anyNA(r) && !identical(unname(r), unname(extent()))
+    })
+
+    # the default structure is picked once, on the first non-empty choice list
+    default_set <- shiny::reactiveVal(FALSE)
     shiny::observe({
       fac_choices <- sort(unique(visits_dat()$hf_name))
+      sel <- shiny::isolate(input$facility)
+      if (!shiny::isolate(default_set()) && length(fac_choices)) {
+        hit <- grep(default_facility, fac_choices, ignore.case = TRUE, value = TRUE)
+        if (length(hit)) {
+          sel <- hit[[1]]
+        }
+        default_set(TRUE)
+      }
       shinyWidgets::updatePickerInput(
         session,
         "facility",
         choices = c("Toutes les formations sanitaires" = "", fac_choices),
-        selected = shiny::isolate(input$facility)
+        selected = sel
       )
     })
 
     facility_ids <- shiny::reactive({
-      ids <- cases_dat()$.id
+      ids <- intersect(cases_dat()$.id, range_ids())
       fac <- input$facility
       if (!is.null(fac) && length(fac) == 1 && nzchar(fac)) {
         ids <- intersect(ids, visits_dat()$.id[visits_dat()$hf_name == fac])
@@ -253,7 +375,8 @@ mod_timeline_server <- function(
       ids
     })
 
-    # a facility change resets the selection to the latest default_n by onset
+    # a facility or period change resets the selection: the latest default_n by
+    # onset, or every case in range once a period is set
     prev_fac <- shiny::reactiveVal(NULL)
     shiny::observe({
       pool <- cases_dat() |>
@@ -261,11 +384,15 @@ mod_timeline_server <- function(
         dplyr::arrange(date_onset)
       choices <- stats::setNames(pool$.id, pool$label)
 
-      fac <- input$facility
+      fac <- list(input$facility, input$daterange)
       facility_changed <- !identical(fac, shiny::isolate(prev_fac()))
       prev_fac(fac)
 
-      latest <- utils::tail(pool$.id, default_n)
+      latest <- if (date_filter_active()) {
+        pool$.id
+      } else {
+        utils::tail(pool$.id, default_n)
+      }
       if (facility_changed) {
         sel <- latest
       } else {
@@ -325,7 +452,24 @@ mod_timeline_server <- function(
       if (is.null(incub_days) || is.na(incub_days)) {
         incub_days <- 0
       }
-      tl <- dplyr::mutate(tl, incub_start = date_onset - incub_days)
+      # unsettled cases end on their last known day in care, whatever the
+      # structure recorded, so the purple marker sits on a real date
+      last_known <- hf |>
+        dplyr::summarise(.by = .id, last_end = max(hf_end))
+      tl <- tl |>
+        dplyr::left_join(
+          last_known,
+          by = dplyr::join_by(.id),
+          relationship = "one-to-one"
+        ) |>
+        dplyr::mutate(
+          exit_end = dplyr::if_else(
+            resolved,
+            exit_end,
+            pmax(last_end, onset_end, na.rm = TRUE)
+          ),
+          incub_start = date_onset - incub_days
+        )
 
       # gridlines at midnights, day labels centred at noon
       range_start <- min(c(tl$incub_start, tl$date_onset, hf$hf_start))
@@ -361,9 +505,14 @@ mod_timeline_server <- function(
           x = to_ms(date_onset),
           x2 = to_ms(exit_end),
           color = disease_col,
-          outcome,
+          outcome = dplyr::if_else(resolved, outcome, "issue inconnue"),
+          end_lab = dplyr::if_else(
+            resolved,
+            "Sortie",
+            "Dernière hospitalisation connue"
+          ),
           d_start = fmt(date_onset),
-          d_end = fmt(date_exit)
+          d_end = fmt(exit_end - 1)
         )
 
       onset_pts <- tl |>
@@ -387,7 +536,18 @@ mod_timeline_server <- function(
           d_end = fmt(date_onset)
         )
 
+      pending_pts <- tl |>
+        dplyr::filter(!resolved) |>
+        dplyr::transmute(
+          y,
+          x = to_ms(exit_end - 1),
+          x2 = to_ms(exit_end),
+          color = pending_col,
+          d_end = fmt(exit_end - 1)
+        )
+
       exit_pts <- tl |>
+        dplyr::filter(resolved) |>
         dplyr::transmute(
           y,
           x = to_ms(date_exit),
@@ -406,9 +566,11 @@ mod_timeline_server <- function(
           y,
           x = to_ms(hf_start),
           x2 = to_ms(hf_end),
-          color = "rgba(0,0,0,0)",
-          borderColor = "#262626",
+          # isolation stays are filled, other visits stay outlined
+          color = dplyr::if_else(is_isolation, isolation_col, "rgba(0,0,0,0)"),
+          borderColor = dplyr::if_else(is_isolation, "#1f6f64", "#262626"),
           hf_name,
+          hf_kind = dplyr::if_else(is_isolation, "Isolement", "Visite"),
           abbr = hf_abbr,
           d_start = fmt(hf_start),
           d_end = fmt(hf_end - 1)
@@ -434,7 +596,7 @@ mod_timeline_server <- function(
             endOnTick = FALSE,
             minPadding = 0,
             maxPadding = 0,
-            tickPositions = day_labels,
+            tickPositions = as.list(day_labels),
             labels = list(
               format = "{value:%e}",
               style = list(fontSize = "10px", color = "#8c8c8c")
@@ -448,7 +610,7 @@ mod_timeline_server <- function(
             gridLineWidth = 0,
             tickLength = 0,
             lineWidth = 0,
-            tickPositions = month_labels,
+            tickPositions = as.list(month_labels),
             labels = list(
               formatter = month_fmt,
               style = list(fontWeight = "bold", fontSize = "12px")
@@ -456,7 +618,8 @@ mod_timeline_server <- function(
           )
         ) |>
         highcharter::hc_yAxis(
-          categories = cats,
+          # as.list: a lone value would serialise as a string, not an array
+          categories = as.list(cats),
           reversed = TRUE,
           title = list(text = NULL)
         ) |>
@@ -469,7 +632,7 @@ mod_timeline_server <- function(
           data = highcharter::list_parse(bar_pts),
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>Maladie ({point.outcome})</b><br>Début : {point.d_start}<br>Sortie : {point.d_end}"
+            pointFormat = "<b>Maladie ({point.outcome})</b><br>Début : {point.d_start}<br>{point.end_lab} : {point.d_end}"
           )
         ) |>
         highcharter::hc_add_series(
@@ -487,10 +650,10 @@ mod_timeline_server <- function(
           dataLabels = list(enabled = TRUE, format = "{point.abbr}"),
           tooltip = list(
             headerFormat = "",
-            pointFormat = "<b>{point.hf_name}</b><br>Du {point.d_start} au {point.d_end}"
+            pointFormat = "<b>{point.hf_name}</b> ({point.hf_kind})<br>Du {point.d_start} au {point.d_end}"
           )
         ) |>
-        # onset and exit last so they stay above the structure rectangles
+        # onset, exit and pending last so they stay above the structure rectangles
         highcharter::hc_add_series(
           name = "Début des symptômes",
           data = highcharter::list_parse(onset_pts),
@@ -498,6 +661,16 @@ mod_timeline_server <- function(
           tooltip = list(
             headerFormat = "",
             pointFormat = "<b>Début des symptômes</b><br>{point.d_start}"
+          )
+        ) |>
+        highcharter::hc_add_series(
+          name = "Actif / issue inconnue",
+          data = highcharter::list_parse(pending_pts),
+          showInLegend = FALSE,
+          enableMouseTracking = nrow(pending_pts) > 0,
+          tooltip = list(
+            headerFormat = "",
+            pointFormat = "<b>Actif ou issue inconnue</b><br>Dernière hospitalisation connue : {point.d_end}"
           )
         ) |>
         highcharter::hc_add_series(
