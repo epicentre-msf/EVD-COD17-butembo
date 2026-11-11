@@ -1,4 +1,4 @@
-# Confirmed cases by health zone (adm2_comptabilisation): last 7 days, last 21 days, total.
+# Confirmed cases by health zone (lab or harmonised source, user-selected): last 7 days, last 21 days, total.
 
 mod_zs_table_ui <- function(id) {
   ns <- shiny::NS(id)
@@ -6,7 +6,17 @@ mod_zs_table_ui <- function(id) {
     full_screen = TRUE,
     title = htmltools::div(
       class = "d-flex align-items-center flex-wrap gap-3",
-      "Cas confirmés par zone de santé",
+      "Cas confirmés par zone de santé par le laboratoire",
+      shiny::radioButtons(
+        ns("zone_src"),
+        label = NULL,
+        choices = c(
+          "Labo" = "adm2_comptabilisation_lab",
+          "Harmonisé" = "adm2_comptabilisation"
+        ),
+        selected = "adm2_comptabilisation_lab",
+        inline = TRUE
+      ),
       shiny::uiOutput(ns("footnote"))
     ),
     bslib::nav_panel(
@@ -14,7 +24,7 @@ mod_zs_table_ui <- function(id) {
       reactable::reactableOutput(ns("tbl"))
     ),
     bslib::nav_panel(
-      "Notifiés par semaine",
+      "Par semaine de résultat",
       reactable::reactableOutput(ns("tbl_weeks"))
     )
   )
@@ -29,7 +39,7 @@ mod_zs_table_server <- function(id, df) {
       d <- df() |>
         dplyr::filter(EVD_status == "Confirmed") |>
         dplyr::mutate(
-          zone = dplyr::coalesce(as.character(adm2_comptabilisation), na_lab)
+          zone = dplyr::coalesce(as.character(.data[[input$zone_src]]), na_lab)
         )
       max_date <- suppressWarnings(max(d$date_lab_result_1, na.rm = TRUE))
       n_since <- \(x, n) sum(x >= max_date - (n - 1), na.rm = TRUE)
@@ -112,9 +122,9 @@ mod_zs_table_server <- function(id, df) {
       d <- df() |>
         dplyr::filter(EVD_status == "Confirmed") |>
         dplyr::mutate(
-          zone = dplyr::coalesce(as.character(adm2_comptabilisation), na_lab),
+          zone = dplyr::coalesce(as.character(.data[[input$zone_src]]), na_lab),
           wk = lubridate::floor_date(
-            date_notification,
+            date_lab_result_1,
             "week",
             week_start = 1
           )

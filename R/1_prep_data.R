@@ -9,7 +9,7 @@
 EXPORT_TO_SHAREPOINT <- TRUE
 SEND_TO_SERVER <- TRUE
 # FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- TRUE
+PREP_LAB_DATA <- FALSE
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- 0.0005
 

@@ -305,7 +305,8 @@ date_vars <- c(
 # define categorical grouping variables
 # in data as named list to be used in app
 group_vars <- c(
-  "Zone de santé" = "adm2_comptabilisation",
+  "Zone de santé (Labo)" = "adm2_comptabilisation_lab",
+  "Zone de santé (Harmonisé)" = "adm2_comptabilisation",
   "Groupe d'âge" = "age_group",
   "Sexe" = "sex",
   "Isolé" = "isolated",
@@ -460,20 +461,23 @@ evd_pal <- unname(evd_status_cols[c("Confirmed", "Probable")])
 # one palette per grouping variable, named by level so a level keeps its
 # colour whatever subset of levels the filters leave
 
+zone_cols <- c(
+  "Katwa" = "#1b6ca8",
+  "Butembo" = "#e08a1e",
+  "Musienene" = "#3a9d8f",
+  "Kalunguta" = "#8e5ea2",
+  "Vuhovi" = "#c9a227",
+  "Masereka" = "#6baed6",
+  "Kyondo" = "#b5651d",
+  "Lubero" = "#4d4d8f",
+  "Biena" = "#8fbf6a",
+  "Manguredjipa" = "#d98cb3"
+)
+
 group_pals <- list(
   EVD_status = evd_status_cols,
-  adm2_comptabilisation = c(
-    "Katwa" = "#1b6ca8",
-    "Butembo" = "#e08a1e",
-    "Musienene" = "#3a9d8f",
-    "Kalunguta" = "#8e5ea2",
-    "Vuhovi" = "#c9a227",
-    "Masereka" = "#6baed6",
-    "Kyondo" = "#b5651d",
-    "Lubero" = "#4d4d8f",
-    "Biena" = "#8fbf6a",
-    "Manguredjipa" = "#d98cb3"
-  ),
+  adm2_comptabilisation_lab = zone_cols,
+  adm2_comptabilisation = zone_cols,
   sex = c("Male" = "#2a6f97", "Female" = "#e9a03b"),
   age_group = c(
     "<1" = "#d9f0a3",
@@ -534,7 +538,7 @@ group_pals <- list(
     "Ecouvillon oral" = "#6d85b6",
     "Lait Maternel" = "#e09f3e"
   )
-# isolation_site_id (70 levels) left to epishiny's pal20 fallback
+  # isolation_site_id (70 levels) left to epishiny's pal20 fallback
 )
 
 # colours for the levels of `var`, named; unmapped levels fall back to pal20
