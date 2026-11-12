@@ -46,11 +46,11 @@ mod_vb_ui <- function(id) {
     ),
     value_box(
       title = vb_title_info(
-        "Narratifs",
+        "Narratifs disponibles",
         paste0(
+          "Total : récits disponibles, lus ou non.<br>",
           "Entrés : récit pré-traité ou lu (y compris « lu - peu détaillé »).<br>",
-          "Disponibles (non entrés) : récit disponible mais pas encore lu.<br>",
-          "Non disponibles : pas de récit."
+          "Non lus : récit disponible mais pas encore lu."
         )
       ),
       value = textOutput(ns("narr_final"), inline = TRUE),
@@ -218,9 +218,9 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
     output$narr_final <- renderText({
       s <- df_summary()
       paste0(
-        scales::number(s$n_narr_entered),
+        scales::number(s$n_narr_entered + s$n_narr_available),
         " (",
-        vb_pct(s$n_narr_entered, s$n_all),
+        vb_pct(s$n_narr_entered + s$n_narr_available, s$n_all),
         ")"
       )
     })
@@ -229,20 +229,20 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
       s <- df_summary()
       vb_stat_line(list(
         list(
-          label = "Disponibles (non entrés)",
+          label = "Entrés",
           value = paste0(
-            scales::number(s$n_narr_available),
+            scales::number(s$n_narr_entered),
             " (",
-            vb_pct(s$n_narr_available, s$n_all),
+            vb_pct(s$n_narr_entered, s$n_all),
             ")"
           )
         ),
         list(
-          label = "Non disponibles",
+          label = "Non lus",
           value = paste0(
-            scales::number(s$n_narr_missing),
+            scales::number(s$n_narr_available),
             " (",
-            vb_pct(s$n_narr_missing, s$n_all),
+            vb_pct(s$n_narr_available, s$n_all),
             ")"
           )
         )
