@@ -96,13 +96,6 @@ mod_epicurve_hz_ui <- function(id, group_vars) {
   )
 }
 
-# "W42" per tick, with the ISO year beneath the first tick and each year change
-label_epiweek <- function(x) {
-  yr <- format(x, "%G")
-  new_yr <- is.na(dplyr::lag(yr)) | yr != dplyr::lag(yr)
-  paste0("W", as.integer(format(x, "%V")), dplyr::if_else(new_yr, paste0("\n", yr), ""))
-}
-
 mod_epicurve_hz_server <- function(id, df, group_vars) {
   shiny::moduleServer(id, function(input, output, session) {
     n_cols <- 3L
@@ -229,24 +222,14 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
           )
         }
 
-        # Weekly bars sit on ISO Mondays, so label them by ISO epiweek
-        if (by_week) {
-          x_scale <- ggplot2::scale_x_date(
-            breaks = scales::breaks_width("4 weeks"),
-            labels = label_epiweek
-          )
-          x_lab <- "Semaine épidémiologique (ISO)"
+        x_lab <- if (by_week) {
+          "Semaine épidémiologique (ISO)"
         } else {
-          x_scale <- ggplot2::scale_x_date(labels = scales::label_date_short())
-          x_lab <- names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()]
+          names(EPICURVE_HZ_DATES)[EPICURVE_HZ_DATES == date_col()]
         }
 
         ggplot2::ggplot(d, ggplot2::aes(x = date, y = n, fill = grp, alpha = partial)) +
-          ggplot2::geom_col(
-            col = "grey70",
-            linewidth = 0.2,
-            width = if (by_week) 7 else 1
-          ) +
+          geom_epicurve(by_week) +
           fill_scale +
           ggplot2::scale_alpha_manual(
             values = c(`FALSE` = 1, `TRUE` = 0.35),
@@ -257,15 +240,9 @@ mod_epicurve_hz_server <- function(id, df, group_vars) {
             expand = ggplot2::expansion(mult = c(0, 0.08)),
             labels = scales::label_comma()
           ) +
-          x_scale +
-          ggplot2::theme_minimal(base_size = 14) +
+          scale_x_epicurve(by_week) +
           ggplot2::labs(x = x_lab, y = "Nouveaux cas") +
-          ggplot2::theme(
-            strip.text = ggplot2::element_text(face = "bold"),
-            panel.grid.minor = ggplot2::element_blank(),
-            panel.spacing.x = ggplot2::unit(1, "lines"),
-            legend.position = "bottom"
-          )
+          theme_epicurve()
       },
       height = function() {
         n_rows <- ceiling(length(selected_zones()) / n_cols)

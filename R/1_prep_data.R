@@ -877,6 +877,19 @@ saveRDS(
 )
 
 #* VIII. DASHBOARD BUNDLE ------------------------------------------------
+# alerts are cleaned in 02_prep_alerts.R; read its latest export
+alert_files <- fs::dir_ls(local_alert_dir, regexp = "alerts_clean__")
+stopifnot(
+  "run 02_prep_alerts.R first: no alerts_clean rds" = length(alert_files) > 0
+)
+alert_latest <- alert_files[which.max(
+  fs::file_info(alert_files)$modification_time
+)]
+alerts_clean <- readRDS(alert_latest)
+cli::cli_alert_info(
+  "alerts: {nrow(alerts_clean)} rows from {fs::path_file(alert_latest)}"
+)
+
 # app_data.rds feeds the evd-2026-app dashboard on episerv; overwritten each run
 app_data <- list(
   linelist = add_delay_pairs(ll_narr_clean, delay_dates),
@@ -885,6 +898,7 @@ app_data <- list(
   hf_visits = hf_visits,
   hf_gis = sf::st_transform(hf_gis, 4326),
   lab_data = lab_data,
+  alerts = alerts_clean,
   admin_data = list(adm1 = adm1, adm2 = adm2, adm3 = adm3)
 )
 

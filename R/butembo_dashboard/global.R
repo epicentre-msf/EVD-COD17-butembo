@@ -75,6 +75,9 @@ hf_visits <- app_data$hf_visits
 # one row per sample tested, for the Lab data tab
 lab_data <- app_data$lab_data
 
+# daily alert counts per zone and area, for the Alerts tab
+alerts <- app_data$alerts
+
 hf_geo <- app_data$hf_gis |>
   dplyr::mutate(
     lon = sf::st_coordinates(geometry)[, 1],
@@ -429,6 +432,9 @@ source("mod_zs_table.R")
 # breakdown of cases by categorical variable
 source("mod_breakdown.R")
 
+# alerts by health zone
+source("mod_alerts.R")
+
 # chronological order, as the delay module subtracts earlier from later
 delay_date_vars <- c(
   "Date de début des symptômes" = "date_symptom_onset",
@@ -554,6 +560,50 @@ group_colours <- function(
   unmapped <- is.na(cols)
   cols[unmapped] <- rep_len(fallback, sum(unmapped))
   unname(cols)
+}
+
+#* Epicurve ggplot helpers ---------------
+
+# "S42" per tick, with the ISO year beneath the first tick and each year change
+label_epiweek <- function(x) {
+  yr <- format(x, "%G")
+  new_yr <- is.na(dplyr::lag(yr)) | yr != dplyr::lag(yr)
+  paste0(
+    "S",
+    as.integer(format(x, "%V")),
+    dplyr::if_else(new_yr, paste0("\n", yr), "")
+  )
+}
+
+# weekly bars sit on ISO Mondays, so they get ISO epiweek labels
+scale_x_epicurve <- function(by_week) {
+  if (by_week) {
+    ggplot2::scale_x_date(
+      breaks = scales::breaks_width("4 weeks"),
+      labels = label_epiweek
+    )
+  } else {
+    ggplot2::scale_x_date(labels = scales::label_date_short())
+  }
+}
+
+geom_epicurve <- function(by_week, ...) {
+  ggplot2::geom_col(
+    col = "grey70",
+    linewidth = 0.2,
+    width = if (by_week) 7 else 1,
+    ...
+  )
+}
+
+theme_epicurve <- function() {
+  ggplot2::theme_minimal(base_size = 14) +
+    ggplot2::theme(
+      strip.text = ggplot2::element_text(face = "bold"),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.spacing.x = ggplot2::unit(1, "lines"),
+      legend.position = "bottom"
+    )
 }
 
 # positional on the lab_result levels: Négatif then Positif

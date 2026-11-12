@@ -235,6 +235,8 @@ server <- function(input, output, session) {
 
   mod_lab_server("lab", lab_period)
 
+  mod_alerts_server("alerts", alerts)
+
   # epishiny 0.1.0 has no default-date arg, so set it once on startup
   observe({
     # epicurve date axis defaults to date of notification

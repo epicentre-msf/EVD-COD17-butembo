@@ -149,7 +149,7 @@ ui <- page_navbar(
       )
     ),
     nav_panel(
-      title = "Courbes épidémiques stratifiées",
+      title = "Epicurves",
       value = "epicurve_hz",
       mod_epicurve_hz_ui("epicurve_hz", group_vars = group_vars)
     ),
@@ -168,7 +168,8 @@ ui <- page_navbar(
       title = "Répartition",
       value = "breakdown",
       mod_breakdown_ui("breakdown")
-    )
+    ),
+    mod_alerts_ui("alerts")
   ),
 
   nav_panel(
@@ -223,6 +224,16 @@ ui <- page_navbar(
       title = "MSF",
       href = "https://msf.org/",
       target = "_blank"
+    )
+  ),
+  nav_item(
+    tags$a(
+      shiny::icon("arrow-up-right-from-square"),
+      "Epicentre dashboard",
+      title = "Epicentre dashboard",
+      href = "https://apps.epicentre-msf.org/secure/app/evd-2026",
+      target = "_blank",
+      rel = "noopener"
     )
   )
 )

@@ -127,6 +127,9 @@ latest_etc_compilation_bor <- fs::dir_ls(fs::path(
 )) |>
   max()
 
+#* ALERT DATA -----------------------
+alert_dir <- fs::path(butembo_project_data_path, "brute", "alertes")
+
 #* Spatial data --------------------
 butembo_project_sf_data_path <- fs::path(
   butembo_project_data_path,
@@ -226,9 +229,11 @@ local_quality_dir <- fs::path(local_dir, "quality")
 local_app_layers_dir <- fs::path(local_dir, "app-layers")
 local_10th_dir <- fs::path(local_dir, "10th-outbreak")
 local_tables_dir <- fs::path(local_dir, "tables")
+local_alert_dir <- fs::path(local_dir, "alerts")
 
 fs::dir_create(c(
   local_tables_dir,
+  local_alert_dir,
   local_geobase_dir,
   local_ll_dir,
   local_hf_dir,
