@@ -251,7 +251,9 @@ tables_dir <- fs::path(out_dir, "tables") # gt and reactable pngs, xlsx exports
 rds_dir <- fs::path(out_dir, "rds") # intermediates the report quotes
 kit_flux_dir <- fs::path(tables_dir, "kitatumba_flux") # weekly Kitatumba admissions/exits
 
-fs::dir_create(c(plots_dir, tables_dir, rds_dir, kit_flux_dir))
+kayna_lab_dir <- fs::path(plots_dir, "kayna_lab") # Kayna and INRB Béni lab epicurves
+
+fs::dir_create(c(plots_dir, tables_dir, rds_dir, kit_flux_dir, kayna_lab_dir))
 
 #* Spatial data
 

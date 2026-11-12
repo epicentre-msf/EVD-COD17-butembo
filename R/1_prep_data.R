@@ -6,12 +6,8 @@
 
 #* CONFIG ------------------------------------
 
-EXPORT_TO_SHAREPOINT <- TRUE
-SEND_TO_SERVER <- TRUE
-# FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- FALSE
-# degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
-GEO_SIMPLIFY_TOL <- 0.0005
+# Sets EXPORT_TO_SHAREPOINT, SEND_TO_SERVER, PREP_LAB_DATA, GEO_SIMPLIFY_TOL
+source(here::here("R", "cli_args.R"))
 
 #* Load packages ---------------------------
 source(here::here("R", "0_global.R"))
@@ -60,8 +56,6 @@ ll_narr <- rio::import(latest_narr_ll, sheet = "data", skip = 2) |>
   as_tibble() |>
   # rows only: dropping empty columns would remove a field nobody filled
   janitor::remove_empty(which = c("rows", "cols"))
-
-n_import <- nrow(ll_narr)
 
 #* I. LINELIST --------------------------
 ll_narr_clean <- ll_narr |>
@@ -118,13 +112,13 @@ ll_narr_clean <- ll_narr |>
       NA_real_
     ),
     # unfilled and inconclusive both read as Unknown
-    infection_butembo = case_when(
-      infection_butembo %in% c("Yes", "Musienene") ~ "Local",
-      infection_butembo == "No" ~ "Imported",
+    infection_butembo_1 = case_when(
+      infection_butembo_1 %in% c("Yes", "Musienene") ~ "Local",
+      infection_butembo_1 == "No" ~ "Imported",
       .default = "Unknown"
     ),
-    infection_butembo = factor(
-      infection_butembo,
+    infection_butembo_1 = factor(
+      infection_butembo_1,
       levels = c("Unknown", "Imported", "Local")
     ),
     sex = case_match(sex, c("H", "M") ~ "Male", "F" ~ "Female"),
@@ -363,15 +357,6 @@ ll_narr_clean <- ll_narr |>
   select(-id_key) |>
   relocate(unique_id)
 
-n_narr_unmatched <- sum(
-  is.na(ll_narr_clean$narrative_status) &
-    !is.na(ll_narr_clean$narratif) &
-    !tolower(str_squish(ll_narr_clean$narratif)) %in% c("pas dispo", "missing")
-)
-if (n_narr_unmatched > 0) {
-  cli::cli_alert_warning("{n_narr_unmatched} narratif values not recognised")
-}
-
 #! Export the linelist: Donnees/ in sharepoint
 if (EXPORT_TO_SHAREPOINT) {
   saveRDS(
@@ -409,11 +394,6 @@ dupes_id <- ll_narr_clean |>
     dupe_count
   )
 
-cli::cli_alert_warning(
-  "{nrow(dupes_id)} duplicated rows across {n_distinct(dupes_id$pid)} pid"
-)
-cli::cli_alert_warning("{sum(is.na(ll_narr_clean$pid))} rows with no pid")
-
 #! export duplicates pid for removal
 dupes_id |>
   arrange(pid) |>
@@ -446,14 +426,8 @@ transmission_events <- ll_narr_clean |>
     names_pattern = "(.*)_([12])$"
   )
 
-n_sets <- nrow(transmission_events)
 transmission_events <- transmission_events |>
   filter(!is.na(infector_ID) | !is.na(infector_name))
-cli::cli_alert_info(
-  "{n_sets - nrow(transmission_events)} of {n_sets} case-sets dropped: \\
-   no infector id or name; {nrow(transmission_events)} transmission events \\
-   over {n_distinct(transmission_events$unique_id)} cases"
-)
 
 # pid is the id we trust for linking cases
 transmission_events <- transmission_events |>
@@ -465,10 +439,6 @@ transmission_events <- transmission_events |>
     to_unique_id = unique_id,
     everything()
   )
-cli::cli_alert_info(
-  "{sum(is.na(transmission_events$from_pid))} of {nrow(transmission_events)} \\
-   events have an infector name but no infector pid"
-)
 
 # export local version
 saveRDS(
@@ -596,7 +566,6 @@ hf_visits <- ll_narr_clean |>
   select(-pid)
 
 # isolation already recorded as a visit would count the case twice
-n_before <- nrow(hf_visits)
 hf_visits <- hf_visits |>
   mutate(
     .by = c(unique_id, hf_name),
@@ -607,41 +576,6 @@ hf_visits <- hf_visits |>
   ) |>
   filter(keep) |>
   select(-keep)
-cli::cli_alert_info(
-  "{n_before - nrow(hf_visits)} isolation rows dropped: \\
-   same structure already visited by the case"
-)
-
-n_notif_lost <- nrow(anti_join(
-  hf_notification,
-  hf_visits,
-  by = join_by(unique_id, hf_name)
-))
-cli::cli_alert_info(
-  "{n_notif_lost} of {nrow(hf_notification)} notifying structures are not \\
-   among the case's visits, so carry no notification flag"
-)
-
-cli::cli_alert_info(
-  "{sum(is.na(hf_visits$hf_name))} visits have no usable structure name"
-)
-
-cli::cli_alert_info(
-  "{nrow(hf_visits)} visits recorded by \\
-   {n_distinct(hf_visits$unique_id)} of {nrow(ll_narr_clean)} cases"
-)
-
-# printed in the data-quality section
-hf_match_summary <- hf_visits |>
-  filter(!is.na(raw_name)) |>
-  mutate(
-    status = case_when(
-      is.na(hf_pcode) ~ "no pcode in name",
-      hf_pcode %in% hf_gis$pcode ~ "matched",
-      .default = "pcode not in geobase"
-    )
-  ) |>
-  count(visit_type, status)
 
 saveRDS(
   hf_visits,
@@ -745,11 +679,9 @@ if (PREP_LAB_DATA) {
   lab_data <- bind_rows(lab_mobile_clean, lab_inrb_clean)
 
   # a future result date is a typo and would anchor the dashboard's latest-result and period filters
-  n_future <- sum(lab_data$date_lab_result > Sys.Date(), na.rm = TRUE)
   lab_data$date_lab_result[
     lab_data$date_lab_result > Sys.Date() & !is.na(lab_data$date_lab_result)
   ] <- NA
-  cli::cli_alert_info("date_lab_result: {n_future} future dates set to NA")
 
   lab_data <- lab_data |>
     mutate(
@@ -771,13 +703,9 @@ if (PREP_LAB_DATA) {
   # negative delays are entry errors; over 15 days is implausible for a lab turnaround
   max_lab_delay <- 15
   for (col in c("delay_sampling_result_days", "delay_notif_result_days")) {
-    n_valid_before <- sum(!is.na(lab_data[[col]]))
     invalid <- !is.na(lab_data[[col]]) &
       (lab_data[[col]] < 0 | lab_data[[col]] > max_lab_delay)
     lab_data[[col]][invalid] <- NA_real_
-    cli::cli_alert_info(
-      "{col}: {sum(invalid)} of {n_valid_before} set to NA (negative or > {max_lab_delay} days)"
-    )
   }
 
   saveRDS(
@@ -796,25 +724,10 @@ if (PREP_LAB_DATA) {
   stopifnot("no saved lab_data rds to reuse" = length(lab_files) > 0)
   lab_latest <- lab_files[which.max(fs::file_info(lab_files)$modification_time)]
   lab_data <- readRDS(lab_latest)
-  cli::cli_alert_info(
-    "lab data skipped: {nrow(lab_data)} rows reused from {fs::path_file(lab_latest)}"
-  )
 }
 
 #* VI. DATA QUALITY -------------------------------------------
 quality <- build_quality(ll_narr_clean)
-
-# variables with no section, or beyond the first two HF slots, are not shown
-n_quality_hidden <- length(setdiff(
-  setdiff(names(ll_narr_clean), QUALITY_EXCLUDE_VARS),
-  quality$completeness$variable
-))
-cli::cli_alert_info(
-  "{nrow(quality$completeness)} variables in the completeness table, \\
-   {n_quality_hidden} left out (no section or excluded)"
-)
-
-print(hf_match_summary)
 
 # dates the delay module pairs up, chronological so delays come out positive
 delay_dates <- c(
@@ -886,9 +799,6 @@ alert_latest <- alert_files[which.max(
   fs::file_info(alert_files)$modification_time
 )]
 alerts_clean <- readRDS(alert_latest)
-cli::cli_alert_info(
-  "alerts: {nrow(alerts_clean)} rows from {fs::path_file(alert_latest)}"
-)
 
 # app_data.rds feeds the evd-2026-app dashboard on episerv; overwritten each run
 app_data <- list(

@@ -66,16 +66,60 @@ harmonize_dates <- function(date) {
   } else {
     # an Excel serial stored as text, otherwise a written-out date
     serial <- suppressWarnings(as.numeric(date))
-    dplyr::if_else(
-      is.na(serial),
+    text <- clean_date_text(date)
+    # month names become numbers, which are day-first and must not be read ymd
+    written <- !is.na(text) & grepl("^[0-9]{1,2} [0-9]{2} [0-9]{2,4}$", text)
+
+    parsed <- dplyr::if_else(
+      written,
+      lubridate::as_date(lubridate::dmy(text, quiet = TRUE)),
       lubridate::as_date(lubridate::parse_date_time(
-        date,
+        text,
         orders = c("ymd", "dmy"),
         quiet = TRUE
-      )),
+      ))
+    )
+
+    failed <- is.na(serial) & is.na(parsed) & !is.na(text) & text != ""
+    if (any(failed)) {
+      message(
+        "harmonize_dates: ", sum(failed), " values unparsed, set to NA: ",
+        paste(utils::head(unique(date[failed]), 20), collapse = " | ")
+      )
+    }
+
+    dplyr::if_else(
+      is.na(serial),
+      parsed,
       as.Date(serial, origin = "1899-12-30")
     )
   }
+}
+
+# Repairs typed dates ("0CTOBRE", "15Septembre26", "12 juillet 2026") into
+# "d mm yyyy" text so month names never depend on the session locale.
+clean_date_text <- function(date) {
+  x <- as.character(date) |>
+    stringi::stri_trans_general("Latin-ASCII") |>
+    tolower() |>
+    stringr::str_squish()
+
+  # a zero is a typo for "o" only beside a letter and away from other digits
+  x <- gsub("(?<=[a-z])0(?![0-9])|(?<![0-9])0(?=[a-z])", "o", x, perl = TRUE)
+  x <- gsub("([0-9])([a-z])", "\\1 \\2", x)
+  x <- gsub("([a-z])([0-9])", "\\1 \\2", x)
+
+  months <- c(
+    "jan" = "01", "fev" = "02", "feb" = "02", "mar" = "03", "avr" = "04",
+    "apr" = "04", "mai" = "05", "may" = "05", "juin" = "06", "juil" = "07",
+    "aou" = "08", "aug" = "08", "sep" = "09", "oct" = "10", "nov" = "11",
+    "dec" = "12"
+  )
+  for (i in seq_along(months)) {
+    x <- gsub(paste0("\\b", names(months)[i], "[a-z]*"), months[[i]], x)
+  }
+
+  stringr::str_squish(x)
 }
 
 #* Dashboard delays ---------------------------------
