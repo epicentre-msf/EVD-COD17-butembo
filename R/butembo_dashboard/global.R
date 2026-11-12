@@ -317,7 +317,7 @@ group_vars <- c(
   "Type de transmission" = "transmission_type_1",
   "Décédé à la notification" = "dead_upon_notif_grp",
   "Issue" = "type_of_exit",
-  "Infection locale" = "infection_butembo",
+  "Infection locale" = "infection_butembo_1",
   "Infector identifié" = "infector_identified",
   "Narratifs" = "narrative_status"
 )
@@ -526,7 +526,7 @@ group_pals <- list(
     "Abandoned" = "#e09f3e",
     "Died" = "#9e2a2b"
   ),
-  infection_butembo = c(
+  infection_butembo_1 = c(
     "Local" = "#9e2a2b",
     "Imported" = "#e09f3e",
     "Unknown" = na_col
