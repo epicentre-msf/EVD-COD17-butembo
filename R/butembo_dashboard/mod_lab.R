@@ -373,6 +373,16 @@ lab_curve_server <- function(id, df, date_vars, group_vars, group_pal) {
         hc <- hc |>
           highcharter::hc_xAxis(
             labels = list(formatter = epishiny:::hc_week_labels())
+          ) |>
+          # same week header as the main epicurve (epiWeekHeader in recolour.js)
+          highcharter::hc_tooltip(
+            formatter = highcharter::JS(
+              "function (tooltip) {
+                var s = tooltip.defaultFormatter.call(this, tooltip);
+                s[0] = window.epiWeekHeader(this.x);
+                return s;
+              }"
+            )
           )
       }
 

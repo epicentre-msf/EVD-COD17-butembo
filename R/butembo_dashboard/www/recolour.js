@@ -1,3 +1,18 @@
+// Shared tooltip header for weekly bars (x = ISO Monday, UTC ms):
+// "S12" on the first line, "16/03 - 22/03" below. Used by every weekly epicurve.
+window.epiWeekHeader = function (x) {
+  var d = new Date(x);
+  // ISO week number: shift to the Thursday of the same week, count from 1 Jan
+  var thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  thu.setUTCDate(thu.getUTCDate() + 3 - ((thu.getUTCDay() + 6) % 7));
+  var jan1 = Date.UTC(thu.getUTCFullYear(), 0, 1);
+  var week = Math.ceil(((thu - jan1) / 864e5 + 1) / 7);
+  return "<b>S" + week + "</b><br/>" +
+    '<span style="font-size:0.85em">' +
+    Highcharts.dateFormat("%d/%m", x) + " - " +
+    Highcharts.dateFormat("%d/%m", x + 6 * 864e5) + "</span><br/>";
+};
+
 // epishiny fixes the epicurve palette; recolour series by name after each render
 (function () {
   // one palette per chart output id, since several epicurves can be on screen
@@ -16,8 +31,8 @@
         formatter: function () {
           var iv = Shiny.shinyapp && Shiny.shinyapp.$inputValues[id.replace(/-chart$/, "-date_interval")];
           var head = String(iv).toLowerCase() === "week"
-            ? "S" + new Date(this.x).getWeek()
-            : Highcharts.dateFormat("%e %b %Y", this.x);
+            ? window.epiWeekHeader(this.x)
+            : "<b>" + Highcharts.dateFormat("%e %b %Y", this.x) + "</b><br/>";
           var total = 0;
           var rows = this.points.map(function (p) {
             total += p.y;
@@ -27,7 +42,7 @@
             return '<span style="color:' + p.color + '">●</span> ' + p.series.name +
               ": <b>" + p.y + pct + "</b><br/>";
           }, this);
-          return "<b>" + head + "</b><br/>" + rows.join("") +
+          return head + rows.join("") +
             "<b>Total : " + Highcharts.numberFormat(total, 0) + "</b>";
         }
       }
