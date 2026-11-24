@@ -98,12 +98,3 @@ Run it locally once `update_data.sh` has built `app_data.rds`:
 ```r
 shiny::runApp(here::here("R", "butembo_dashboard"))
 ```
-
-To deploy code changes, commit and push, then:
-
-```sh
-./deploy_code.sh            # check everything is on GitHub, then git pull on episerv
-./deploy_code.sh --check-only
-```
-
-The data reach the server separately, through `update_data.sh`.
