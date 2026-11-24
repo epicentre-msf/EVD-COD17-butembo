@@ -1,7 +1,7 @@
 <div align = "center">
 
 # EVD-COD17-butembo
-Epidemiological situation report and analyses for the BDBV response in **Butembo & Katwa Health zones (city of Butembo)** (RDC). All sitreps can be found on [this sharepoint](https://msfintl.sharepoint.com/:f:/r/sites/GRP-PAR-RDC/CD153EBOLABUTEMBO/10%20M%C3%A9dical/17%20Epidemiologie/Analyses/rapport%20MSF/Butembo/ocp-sitreps-butembo?csf=1&web=1&e=1tHqJP).
+Epidemiological surveillance for the BDBV response in **Butembo & Katwa Health zones (city of Butembo)** (RDC). All sitreps can be found on [this sharepoint](https://msfintl.sharepoint.com/:f:/r/sites/GRP-PAR-RDC/CD153EBOLABUTEMBO/10%20M%C3%A9dical/17%20Epidemiologie/Analyses/rapport%20MSF/Butembo/ocp-sitreps-butembo?csf=1&web=1&e=1tHqJP).
 
 Contact: hugo.soubrier@epicentre.msf.org / msff-butembo-ebola-epidemio@paris.msf.org
 
@@ -9,76 +9,101 @@ Contact: hugo.soubrier@epicentre.msf.org / msff-butembo-ebola-epidemio@paris.msf
 
 ## About
 
-This repository holds the code for the epidemiological surveillance of the
-BDBV response in Butembo, prepared by Médecins Sans Frontières with the
-support of the Ministère de la Santé, RDC. It contains three things:
+Code for the epidemiological surveillance of the BDBV response in Butembo,
+prepared by Médecins Sans Frontières with the support of the Ministère de la
+Santé, RDC:
 
-- **Data prep** — scripts that clean the EVD linelist, health-facility visits,
-  alerts and contacts data, and export the datasets used downstream.
-- **Dashboard** — a Shiny app (`R/butembo_dashboard/`) for exploring the
-  surveillance data: epicurves, maps, delays, health facilities, laboratory
-  results, data quality and a case timeline.
-- **Ad-hoc analyses** — one-off scripts answering specific questions, such as
-  the vaccinated-case linelist and the Beni dataset.
+- **Data pipeline**: cleans the EVD linelist, lab results, health-facility
+  visits, alerts and contacts, and builds the dashboard data.
+- **Dashboard**: a Shiny app (`R/butembo_dashboard/`) with epicurves, maps,
+  delays, health facilities, lab results, alerts, contacts, transmission
+  chains, data quality and a reference map.
+- **Ad-hoc analyses**: one-off scripts for specific questions.
 
-## Data sources
-All data are stored on the OCP sharepoint for the Butembo project and are only available to authorised access. 
-
-### EVD linelist data
-The epicentre Linelist used across the outbreak is manually filled every day using the data triangulated from the laboratory database, the local linelist, the case investigations, and the case narratives. 
-
-### CTE linelist data
-A separate export for the CTE Kitatumba and CT UCG holds the treatment-centre patient linelist and a daily bed-occupancy sheet.
+No data is stored in this repository. All data live on the OCP SharePoint and
+are only available with authorised access.
 
 ## Project layout
 
-- `R/` — data prep and ad-hoc scripts.
-  - `0_global.R` — paths and shared config, sourced by every script.
-  - `1_prep_data.R` — cleans the linelist, facility visits, alerts and
-    contacts. The only script that reads SharePoint; it writes the cleaned
-    data and `app_data.rds` for the dashboard.
-  - `01b_prep_beni_data.R` — imports and cleans the Beni data.
-  - `fn_quality.R` — data-quality tables shown in the dashboard.
-  - `prep_for_sharing.R` — de-identified linelist for sharing outside the epi team.
-  - `vaccinated_cases.R` — shareable vaccinated-case linelist.
-  - `butembo_dashboard/` — the Shiny app, one `mod_*.R` file per tab.
-  - `archives/` — retired situation-report scripts.
-- `report/` — legacy Quarto situation report (`butembo-report.qmd`) and its
-  render pipeline (`_render.R`).
-- `output/`, `data/`, `local/`, `temp/` — local data and generated files (gitignored).
-
-## Getting started
-
-The project reads its data from a OneDrive/SharePoint folder. Set the path in
-your `.Renviron` file (in your `HOME` or the project directory):
-
-```r
-SHAREPOINT_PATH="ADD YOUR SHAREPOINT PATH HERE"
+```
+update_data.sh            run the data pipeline
+deploy_code.sh            deploy the code to the server
+R/
+  0_global.R              packages, config and SharePoint paths, sourced by every script
+  cli_args.R              command-line flags for 1_prep_data.R
+  utils.R                 shared helpers
+  1_prep_data.R           main pipeline: clean all data, export, build app_data.rds
+  02_prep_alerts.R        stack the health-zone alert registers
+  fn_quality.R            data-quality tables for the dashboard
+  update_geobase.R        copy the latest OutbreakTools geobase
+  reference-map.R         build the reference map (health zones, areas, facilities)
+  butembo_dashboard/      Shiny app, one mod_*.R file per tab
+  prep_for_sharing.R      de-identified linelist for sharing outside the epi team
+  vaccinated_cases.R      vaccinated-case linelist
+  transmission_chains.R   transmission chain tables
+  etc_analysis.R          CTE occupancy and flows
+  kitatumba_admissions.R  CTE Kitatumba admissions and exits
+  01b_prep_beni_data.R    Beni data
+  kayna_analysis.R        Kayna lab results (draft)
+  archives/               retired sitrep scripts
+report/                   retired Quarto sitrep (sources scripts now in R/archives)
 ```
 
-Restart your R session so the updated `.Renviron` is loaded.
+Created when the scripts run (gitignored): `local/` (cleaned linelists,
+duplicates, quality checks), `output/` (plots and tables) and
+`R/butembo_dashboard/data/app_data.rds`.
 
-## Updating the data and dashboard
+## Setup
 
-Clean the latest exports and refresh the dashboard data:
+1. **Sync the SharePoint libraries** with OneDrive: the Butembo project
+   workplace (`17 Epidemiologie`), *Epi Platform-BVD – Data and Tools*,
+   *Ebola Outbreaks - COD_UGA-2026* and *OutbreakTools - GeoBase*.
+2. **Point R to the synced folder** in `.Renviron` (in your `HOME` or the
+   project directory), then restart R:
+   ```r
+   SHAREPOINT_PATH="path/to/your/OneDrive/folder"
+   ```
+   Folder names below it are set in `R/0_global.R`. Adjust them if your sync
+   names differ.
+3. **Install the packages.** Most are on CRAN. These come from GitHub:
+   ```r
+   remotes::install_github(c(
+     "epicentre-msf/epishiny", "epicentre-msf/epithemes",
+     "epicentre-msf/epivis", "epicentre-msf/qxl", "reconhub/epicontacts"
+   ))
+   ```
+   `rpxl` (reads password-protected `.xlsb` exports) and `epishiny.contacts`
+   are also needed for some scripts.
+4. **To deploy**, add an `episerv` host to your `~/.ssh/config`.
 
-```r
-source(here::here("R", "1_prep_data.R"))
+## Updating the data
+
+```sh
+./update_data.sh            # clean data, export to SharePoint, send app_data.rds to episerv
+./update_data.sh --help     # list the flags
 ```
 
-Two switches at the top of the script control the outputs: `EXPORT_TO_SHAREPOINT`
-writes the cleaned data back to SharePoint, and `SEND_TO_SERVER` rsyncs
-`app_data.rds` to the dashboard on the server.
+| Flag | Effect |
+|---|---|
+| `--update-alerts` | rerun `02_prep_alerts.R` first (default: reuse the latest export) |
+| `--update-lab` | rebuild the lab data (default: reuse it from the last `app_data.rds`) |
+| `--update-geobase` | copy the latest geobase; a new version also rebuilds the reference map |
+| `--no-export` | do not write exports to SharePoint |
+| `--no-send` | do not send `app_data.rds` to episerv |
 
-To run the dashboard locally:
+## Dashboard
+
+Run it locally once `update_data.sh` has built `app_data.rds`:
 
 ```r
 shiny::runApp(here::here("R", "butembo_dashboard"))
 ```
 
-To update the deployed dashboard, pull the code on the server, then rerun
-the data prep with `SEND_TO_SERVER <- TRUE`:
+To deploy code changes, commit and push, then:
 
 ```sh
-ssh episerv "cd EVD-COD17-butembo && git pull"
+./deploy_code.sh            # check everything is on GitHub, then git pull on episerv
+./deploy_code.sh --check-only
 ```
+
+The data reach the server separately, through `update_data.sh`.

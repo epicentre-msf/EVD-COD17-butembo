@@ -1,7 +1,7 @@
 # ! Function to fetch and update the GEOBASE
 
 # the latest geobase is pulled from the GIS master database, cleaned, and data checks by Patrick in https://github.com/epicentre-msf/outbreak-tools-geobase/blob/main/geo/COD_2026.R
-# The geobase .xlsx and .rds are then stored in the Outbreak Tools geobase sharepoint: https://msfintl.sharepoint.com/sites/grp-epi-proj-outbreaktools/GeoBase/Forms/AllItems.aspx?d=wf4a7717a520b424697800cf30b70233f&csf=1&web=1&e=XP1fMo&ovuser=4d9dd1af%2D83ce%2D4e9b%2Db090%2Db0543ccc2b31%2CHugo%2ESOUBRIER%40epicentre%2Emsf%2Eorg&TeamsCID=0ea0ec01%2Dcb27%2D4fb9%2D9b8b%2D0b4c94c2d901&OR=Teams%2DHL&CT=1795515093353&clickparams=eyJBcHBOYW1lIjoiVGVhbXMtRGVza3RvcCIsIkFwcFZlcnNpb24iOiI1MC8yNjExMDEwMDcxNiIsIkhhc0ZlZGVyYXRlZFVzZXIiOmZhbHNlfQ%3D%3D&CID=6ef351a2%2Db0a2%2D4001%2D2e02%2D01a744acb45c&cidOR=SPO&FolderCTID=0x012000818F00893D847E4596998CFAC838B69D&id=%2Fsites%2Fgrp%2Depi%2Dproj%2Doutbreaktools%2FGeoBase%2FCOD
+# The geobase .xlsx and .rds are then stored in the Outbreak Tools geobase sharepoint: https://msfintl.sharepoint.com/sites/grp-epi-proj-outbreaktools/GeoBase/Forms/AllItems.aspx?id=%2Fsites%2Fgrp-epi-proj-outbreaktools%2FGeoBase%2FCOD
 # This function
 # 1. finds the requested geobase version for a country (ADM/HF), "latest" by default
 # 2. copies the flat references (adm_reference_<country>.xlsx, hf_reference_<country>.xlsx)

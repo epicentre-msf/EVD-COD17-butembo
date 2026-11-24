@@ -63,8 +63,10 @@ iso_week_select <- tags$div(
   )
 )
 
-# user interface
-ui <- page_navbar(
+# user interface. A function so it is rebuilt on each page load: the www/ files
+# checked below (reference map, cache-busting mtimes) can change after the
+# container started.
+ui <- function(req) page_navbar(
   title = "Surveillance BVD Butembo",
   id = "nav",
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
