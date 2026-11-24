@@ -33,6 +33,7 @@ vignettes/*.pdf
 *.docx
 *.pdf
 *.html
+!R/butembo_dashboard/www/reference_map.html
 *.xlsx
 *.csv
 
