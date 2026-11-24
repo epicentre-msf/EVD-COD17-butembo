@@ -12,6 +12,6 @@ geo_tol_arg <- sub(
 EXPORT_TO_SHAREPOINT <- TRUE && !"--no-export" %in% cli_args
 SEND_TO_SERVER <- TRUE && !"--no-send" %in% cli_args
 # FALSE reuses lab_data from the last app_data.rds, for when the lab exports are not to hand
-PREP_LAB_DATA <- TRUE || "--lab" %in% cli_args
+PREP_LAB_DATA <- FALSE || "--lab" %in% cli_args
 # degrees, about 50 m; the app layers were slow at full detail. 0 keeps them as-is
 GEO_SIMPLIFY_TOL <- if (length(geo_tol_arg)) as.numeric(geo_tol_arg) else 0.0005

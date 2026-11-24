@@ -16,6 +16,7 @@ source(here::here("R", "fn_quality.R"))
 #* Path ------------------------------------
 time_write <- time_stamp()
 app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
+fs::dir_create(fs::path_dir(app_data_path))
 
 #* Local geo cache --------------------------
 
@@ -605,7 +606,7 @@ if (PREP_LAB_DATA) {
         "Nouveau Prélèvement",
       date_notification = ymd(date_de_notification_dd_mm_yyy),
       patient_status = statut_du_patient_au_moment_collecte_echantillon_dcd_vivant,
-      province,
+      #province,
       zone_de_sante,
       aire_de_sante,
       origin = provenance,

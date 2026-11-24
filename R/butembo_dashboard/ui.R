@@ -25,8 +25,16 @@ period_select <- tags$div(
 
 # ISO week filter under the period filter; values are week Mondays
 iso_mondays <- seq(
-  lubridate::floor_date(min(but_ll$date_lab_result_1, na.rm = TRUE), "week", week_start = 1),
-  lubridate::floor_date(max(but_ll$date_lab_result_1, na.rm = TRUE), "week", week_start = 1),
+  lubridate::floor_date(
+    min(but_ll$date_lab_result_1, na.rm = TRUE),
+    "week",
+    week_start = 1
+  ),
+  lubridate::floor_date(
+    max(but_ll$date_lab_result_1, na.rm = TRUE),
+    "week",
+    week_start = 1
+  ),
   by = "week"
 )
 iso_week_choices <- c(
@@ -106,7 +114,10 @@ ui <- page_navbar(
     }
   ),
   nav_menu(
-    title = tags$span(bsicons::bs_icon("clipboard-data"), "Données de surveillance"),
+    title = tags$span(
+      bsicons::bs_icon("clipboard-data"),
+      "Données de surveillance"
+    ),
     nav_panel(
       title = "Tableau de bord",
       value = "surveillance",
