@@ -68,7 +68,7 @@ ui <- page_navbar(
   title = "Surveillance BVD Butembo",
   id = "nav",
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
-  fillable = c("lab", "quality"),
+  fillable = c("lab", "quality", "reference_map"),
   gap = 10,
   header = tagList(
     shinyjs::useShinyjs(),
@@ -209,6 +209,46 @@ ui <- page_navbar(
   mod_lab_ui("lab"),
 
   mod_quality_ui("quality", quality),
+
+  # reference map of North Kivu (province, HZ, HA, HF), built by
+  # R/reference-map.R into www/reference_map.html. The iframe src is only set
+  # the first time the tab is shown: MapLibre fits its bounds to the frame
+  # size, which is 0x0 while the tab is hidden.
+  nav_panel(
+    title = tags$span(bsicons::bs_icon("map"), "Carte de référence"),
+    value = "reference_map",
+    bslib::card(
+      full_screen = TRUE,
+      class = "p-0",
+      bslib::card_body(
+        padding = 0,
+        if (file.exists("www/reference_map.html")) {
+          tagList(
+            tags$iframe(
+              id = "ref-map-frame",
+              `data-src` = paste0(
+                "assets/reference_map.html?v=",
+                as.integer(file.mtime("www/reference_map.html"))
+              ),
+              title = "Carte de référence Nord-Kivu",
+              style = "border: 0; width: 100%; height: 100%;"
+            ),
+            tags$script(HTML(
+              "$(document).on('shown.bs.tab', 'a[data-value=\"reference_map\"]', function() {
+                var f = document.getElementById('ref-map-frame');
+                if (!f.getAttribute('src')) f.setAttribute('src', f.dataset.src);
+              });"
+            ))
+          )
+        } else {
+          tags$p(
+            class = "text-muted p-3",
+            "Carte non disponible : lancer R/reference-map.R pour la générer."
+          )
+        }
+      )
+    )
+  ),
 
   nav_spacer(),
   nav_item(

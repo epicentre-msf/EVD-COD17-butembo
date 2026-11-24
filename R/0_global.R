@@ -61,14 +61,6 @@ butembo_project_data_path <- fs::path(
   "Donnees"
 )
 
-hf_flow_gis_path <- fs::path(
-  butembo_project_data_path,
-  "spatiale",
-  "etablissements_sante",
-  "Nombre de cas par FOSA",
-  "cod_butembo_itinéraires_cas_confirmés.json"
-)
-
 #*TRASMISSION DATA
 transmission_dir <- fs::path(
   butembo_project_data_path,
@@ -133,7 +125,8 @@ alert_dir <- fs::path(butembo_project_data_path, "brute", "alertes")
 #* Spatial data --------------------
 butembo_project_sf_data_path <- fs::path(
   butembo_project_data_path,
-  "spatiale"
+  "spatiale",
+  "geobase"
 )
 
 #* LABORATORY DATA ------------------
@@ -210,23 +203,13 @@ to_match_dir <- fs::path(butembo_matched_ll_dir, "to-be-matched")
 # nominative confirmed cases with positive tests, written by prep_for_sharing.R
 lab_data_dir <- fs::path(butembo_matched_ll_dir, "lab-data")
 
-# LL facility names matched to the master geobase, with a geometry
-hf_geo_csv <- fs::path(
-  butembo_project_sf_data_path,
-  "etablissements_sante",
-  "cod_butembo_matching_LL_GIS_MDB.csv"
-)
-
 local_dir <- here::here("local")
-local_geobase_dir <- fs::path(local_dir, "geobase")
 local_ll_dir <- fs::path(local_dir, "linelist")
 local_hf_dir <- fs::path(local_dir, "hf-visits")
-local_hf_geo_csv <- fs::path(local_hf_dir, fs::path_file(hf_geo_csv))
 local_dupes_dir <- fs::path(local_dir, "dupes")
 local_transmission_dir <- fs::path(local_dir, "transmission")
 local_lab_dir <- fs::path(local_dir, "lab-data")
 local_quality_dir <- fs::path(local_dir, "quality")
-local_app_layers_dir <- fs::path(local_dir, "app-layers")
 local_10th_dir <- fs::path(local_dir, "10th-outbreak")
 local_tables_dir <- fs::path(local_dir, "tables")
 local_alert_dir <- fs::path(local_dir, "alerts")
@@ -234,14 +217,12 @@ local_alert_dir <- fs::path(local_dir, "alerts")
 fs::dir_create(c(
   local_tables_dir,
   local_alert_dir,
-  local_geobase_dir,
   local_ll_dir,
   local_hf_dir,
   local_dupes_dir,
   local_transmission_dir,
   local_lab_dir,
-  local_quality_dir,
-  local_app_layers_dir
+  local_quality_dir
 ))
 
 #* OUTPUT DIRECTORIES ------------------------------------
@@ -257,8 +238,26 @@ fs::dir_create(c(plots_dir, tables_dir, rds_dir, kit_flux_dir, kayna_lab_dir))
 
 #* Spatial data
 
-sf_data_path <- fs::path(butembo_project_sf_data_path, "rds")
+# --update-geobase (1_prep_data.R): copy the latest OutbreakTools geobase first,
+# so the version picked below is the new one
+if (isTRUE(get0("UPDATE_GEOBASE", ifnotfound = FALSE))) {
+  source(here::here("R", "update_geobase.R"))
+  # $updated is FALSE when that version is already here (nothing copied)
+  geobase_update <- update_geobase(
+    "COD",
+    butembo_geo_path = butembo_project_sf_data_path
+  )
+}
 
-adm1 <- read_geo_cached("COD_adm1_sub.rds")
-adm2 <- read_geo_cached("COD_adm2_sub.rds")
-adm3 <- read_geo_cached("COD_adm3_sub.rds")
+# latest geobase copied by update_geobase()
+geobase_version <- fs::dir_ls(
+  butembo_project_sf_data_path,
+  type = "directory",
+  regexp = "COD__"
+) |>
+  max()
+sf_data_path <- fs::path(geobase_version, "sf")
+
+adm1 <- readRDS(fs::path(sf_data_path, "COD_adm1.rds"))
+adm2 <- readRDS(fs::path(sf_data_path, "COD_adm2.rds"))
+adm3 <- readRDS(fs::path(sf_data_path, "COD_adm3.rds"))

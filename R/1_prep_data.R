@@ -6,7 +6,8 @@
 
 #* CONFIG ------------------------------------
 
-# Sets EXPORT_TO_SHAREPOINT, SEND_TO_SERVER, PREP_LAB_DATA, GEO_SIMPLIFY_TOL
+# Sets EXPORT_TO_SHAREPOINT, SEND_TO_SERVER, PREP_LAB_DATA, UPDATE_GEOBASE,
+# GEO_SIMPLIFY_KEEP
 source(here::here("R", "cli_args.R"))
 
 #* Load packages ---------------------------
@@ -18,30 +19,32 @@ time_write <- time_stamp()
 app_data_path <- fs::path("R", "butembo_dashboard", "data", "app_data.rds")
 fs::dir_create(fs::path_dir(app_data_path))
 
-#* Local geo cache --------------------------
-
-#load and save to local the geobase from sharepoint -- silenced because of size
-# adm1 <- readRDS(fs::path(sf_data_path, "COD_adm1.rds"))
-# saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1.rds"))
-# adm1_sub <- readRDS(fs::path(sf_data_path, "COD_adm1_sub.rds"))
-# saveRDS(adm1, fs::path(local_geobase_dir, "COD_adm1_sub.rds"))
-
-# # adm2
-# adm2 <- readRDS(fs::path(sf_data_path, "COD_adm2.rds"))
-# saveRDS(adm2, fs::path(local_geobase_dir, "COD_adm2.rds"))
-# adm2_sub <- readRDS(fs::path(sf_data_path, "COD_adm2_sub.rds"))
-# saveRDS(adm2, fs::path(local_geobase_dir, "COD_adm2_sub.rds"))
-
-# # adm3
-# adm3 <- readRDS(fs::path(sf_data_path, "COD_adm3.rds"))
-# saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3.rds"))
-# adm3_sub <- readRDS(fs::path(sf_data_path, "COD_adm3_sub.rds"))
-# saveRDS(adm3, fs::path(local_geobase_dir, "COD_adm3_sub.rds"))
-
 #* Geobase -----------------------------
-adm1 <- readRDS(fs::path(local_geobase_dir, "COD_adm1.rds"))
-adm2 <- readRDS(fs::path(local_geobase_dir, "COD_adm2.rds"))
-adm3 <- readRDS(fs::path(local_geobase_dir, "COD_adm3.rds"))
+# adm1/adm2/adm3 are read from the SharePoint geobase in 0_global.R
+
+# --update-geobase: a new geobase version also gets a new reference map
+if (UPDATE_GEOBASE && !isTRUE(geobase_update$updated)) {
+  cli::cli_alert_info(
+    "Geobase {fs::path_file(geobase_version)} already present: reference map not rebuilt"
+  )
+}
+if (UPDATE_GEOBASE && isTRUE(geobase_update$updated)) {
+  cli::cli_h2(
+    "Rebuilding the reference map for {fs::path_file(geobase_version)}"
+  )
+  ref_map_status <- system2(
+    file.path(R.home("bin"), "Rscript"),
+    args = c(
+      shQuote(here::here("R", "reference-map.R")),
+      if (!SEND_TO_SERVER) "--no-send"
+    )
+  )
+  if (ref_map_status != 0) {
+    cli::cli_alert_danger(
+      "Reference map failed (exit {ref_map_status}), see output above"
+    )
+  }
+}
 
 # drop geometry
 adm1_nosf <- adm1 |> st_drop_geometry() |> select(adm1_name, adm1_pcode)
@@ -396,13 +399,14 @@ dupes_id <- ll_narr_clean |>
   )
 
 #! export duplicates pid for removal
+dupes_path <- fs::path(
+  local_dupes_dir,
+  glue::glue("{CONFIG$export_prefix}_pid_duplicates__{time_write}.xlsx")
+)
 dupes_id |>
   arrange(pid) |>
   qxl::qxl(
-    file = fs::path(
-      local_dupes_dir,
-      glue::glue("{CONFIG$export_prefix}_pid_duplicates__{time_write}.xlsx")
-    ),
+    file = dupes_path,
     group = "pid",
     filter = TRUE
   )
@@ -458,15 +462,8 @@ but_hf <- rio::import(latest_narr_ll, sheet = "facilities", skip = 2) |>
   # rows only: dropping empty columns would remove a field nobody filled
   janitor::remove_empty(which = c("rows", "cols"))
 
-#! load the latest GIS geobase replace when identified
-hf_gis_geojson <- fs::path(
-  butembo_project_data_path,
-  "spatiale",
-  "hf_gis_butembo_20261023.geojson"
-)
-
-hf_gis <- sf::st_read(hf_gis_geojson, quiet = TRUE) |>
-  janitor::clean_names()
+# facilities from the latest geobase (whole country), restricted in VII
+hf_gis <- readRDS(fs::path(sf_data_path, "COD_hf.rds"))
 
 #* Notification structure
 hf_notification <- ll_narr_clean |>
@@ -748,47 +745,23 @@ saveRDS(
 )
 
 #* VII. APP GEOBASE -------------------------------------------
-# keep only the units the data reference, to keep the app light
-adm1_pcode_used <- unique(na.omit(c(
-  ll_narr_clean$adm1_pcode__onset,
-  ll_narr_clean$adm1_pcode__notif,
-  ll_narr_clean$adm1_pcode__res
-)))
-
-adm2_pcode_used <- unique(na.omit(c(
-  ll_narr_clean$adm2_pcode__onset,
-  ll_narr_clean$adm2_pcode__notif,
-  ll_narr_clean$adm2_pcode__comptabilisation,
-  ll_narr_clean$adm2_pcode__res
-)))
-
-adm3_pcode_used <- unique(na.omit(c(
-  ll_narr_clean$adm3_pcode__onset,
-  ll_narr_clean$adm3_pcode__notif,
-  ll_narr_clean$adm3_pcode__res
-)))
-
-adm1 <- adm1 |>
-  filter(adm1_pcode %in% adm1_pcode_used)
-
-adm2 <- adm2 |>
-  filter(adm2_pcode %in% adm2_pcode_used)
-
-adm3 <- adm3 |>
-  filter(adm3_pcode %in% adm3_pcode_used)
+# provinces and health zones with cases, all health areas inside those zones;
+# saved to <geobase version>/sf_sub/ unless --no-export
+adm_sub <- restrict_geobase(
+  ll_narr_clean,
+  adm1,
+  adm2,
+  adm3,
+  hf = hf_gis,
+  hf_pcodes = hf_visits$hf_pcode,
+  save = EXPORT_TO_SHAREPOINT
+)
+hf_gis <- adm_sub$hf
 
 # the app draws on a web basemap, so it needs lon/lat; done once here
-adm1 <- prep_app_layer(adm1)
-adm2 <- prep_app_layer(adm2)
-adm3 <- prep_app_layer(adm3)
-
-saveRDS(
-  list(adm1 = adm1, adm2 = adm2, adm3 = adm3),
-  fs::path(
-    local_app_layers_dir,
-    glue::glue("{CONFIG$export_prefix}_app_admin_layers__{time_write}.rds")
-  )
-)
+adm1 <- prep_app_layer(adm_sub$adm1)
+adm2 <- prep_app_layer(adm_sub$adm2)
+adm3 <- prep_app_layer(adm_sub$adm3)
 
 #* VIII. DASHBOARD BUNDLE ------------------------------------------------
 # alerts are cleaned in 02_prep_alerts.R; read its latest export
@@ -816,8 +789,8 @@ app_data <- list(
 saveRDS(app_data, app_data_path)
 
 if (SEND_TO_SERVER) {
-  #* Send data to the server
-  system2(
+  #* Send data to the server (exit status reported in the summary)
+  rsync_status <- system2(
     "rsync",
     args = c(
       "-zavh",
@@ -827,26 +800,74 @@ if (SEND_TO_SERVER) {
   )
 }
 
-#* Summary of app_data ---------------------
-app_tables <- app_data[vapply(app_data, is.data.frame, logical(1))]
-app_tables_msg <- purrr::imap_chr(
-  app_tables,
-  \(x, nm) paste0(nm, ": ", nrow(x), " rows x ", ncol(x), " cols")
+#* Summary ---------------------------------------------------------------
+# one line per prep step (what came out, how much), then where it went
+fmt_n <- function(x) format(x, big.mark = " ", trim = TRUE)
+fmt_d <- function(x) format(x, "%d/%m/%Y")
+
+n_status <- table(ll_narr_clean$EVD_status)
+status_txt <- paste(
+  fmt_n(as.integer(n_status)),
+  tolower(names(n_status)),
+  collapse = ", "
 )
-admin_msg <- purrr::imap_chr(
-  app_data$admin_data,
-  \(x, nm) paste0(nm, " (", nrow(x), ")")
+n_dupes <- dplyr::n_distinct(dupes_id$pid)
+# results and latest result date per lab (INRB Béni, Laboratoire Mobile)
+lab_txt <- lab_data |>
+  summarise(
+    .by = source,
+    n = n(),
+    last = max(date_lab_result, na.rm = TRUE)
+  ) |>
+  arrange(source) |>
+  mutate(txt = paste0(source, " ", fmt_n(n), " (latest ", fmt_d(last), ")")) |>
+  pull(txt) |>
+  paste(collapse = ", ")
+
+cli::cli_h1("Data prep {CONFIG$export_prefix} \u00b7 {format(Sys.time(), '%d/%m/%Y %H:%M')}")
+cli::cli_text(
+  "Linelist source: {.file {fs::path_file(latest_narr_ll)}} ",
+  "(modified {format(fs::file_info(latest_narr_ll)$modification_time, '%d/%m/%Y %H:%M')})"
 )
-cli::cli_h2(
-  "app_data: {fs::path_file(app_data_path)}, {fs::file_size(app_data_path)}"
-)
-cli::cli_bullets(c(
-  rlang::set_names(app_tables_msg, rep("i", length(app_tables_msg))),
-  "i" = "quality: {length(app_data$quality)} elements",
-  "i" = "admin_data features: {toString(admin_msg)}",
-  if (SEND_TO_SERVER) {
-    c("v" = "sent to episerv")
+
+cli::cli_h2("Steps")
+cli::cli_dl(c(
+  "I. Linelist" = paste0(
+    fmt_n(nrow(ll_narr_clean)), " patients (", status_txt, "), ",
+    "last lab confirmation ", fmt_d(max(ll_narr_clean$date_lab_result_1, na.rm = TRUE))
+  ),
+  "II. Duplicates" = if (n_dupes > 0) {
+    paste0("{.strong ", n_dupes, " pid} in duplicate, see {.file ", fs::path_file(dupes_path), "}")
   } else {
-    c("!" = "not sent to episerv")
+    "none"
+  },
+  "III. Transmission" = paste0(fmt_n(nrow(transmission_events)), " links"),
+  "IV. HF visits" = paste0(
+    fmt_n(nrow(hf_visits)), " visits for ",
+    fmt_n(dplyr::n_distinct(hf_visits$unique_id)), " patients"
+  ),
+  "V. Lab" = paste0(fmt_n(nrow(lab_data)), " results: ", lab_txt),
+  "VI. Quality" = paste0(length(quality), " tables (", toString(names(quality)), ")"),
+  "VII. Geobase" = fs::path_file(geobase_version),
+  "VIII. Alerts" = paste0(
+    fmt_n(nrow(alerts_clean)), " rows, latest alert ",
+    fmt_d(max(alerts_clean$date, na.rm = TRUE))
+  )
+))
+
+cli::cli_h2("Outputs")
+cli::cli_bullets(c(
+  if (EXPORT_TO_SHAREPOINT) {
+    c("v" = "Linelist + geobase subset exported to SharePoint")
+  } else {
+    c("!" = "SharePoint export skipped (--no-export)")
+  },
+  "v" = "{.file {app_data_path}} written ({fs::file_size(app_data_path)})",
+  if (!SEND_TO_SERVER) {
+    c("!" = "Not sent to episerv (--no-send)")
+  } else if (identical(rsync_status, 0L)) {
+    c("v" = "Sent to episerv")
+  } else {
+    c("x" = "Sending to episerv failed (rsync exit {rsync_status})")
   }
 ))

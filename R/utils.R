@@ -16,23 +16,6 @@ export_clean <- function(
   )
 }
 
-#* LOCAL CACHE ------------------------------
-
-# adm files change rarely; prefer the local copy 1_prep_data.R writes and
-# only fall back to SharePoint (sharepoint_dir) when no cache exists yet
-read_geo_cached <- function(
-  file,
-  local_dir = local_geobase_dir,
-  sharepoint_dir = sf_data_path
-) {
-  local_path <- fs::path(local_dir, file)
-  if (fs::file_exists(local_path)) {
-    readRDS(local_path)
-  } else {
-    readRDS(fs::path(sharepoint_dir, file))
-  }
-}
-
 #* AGE ------------------------------
 
 # unit is Ans, Mois or Jour, NA meaning Ans. French Excel writes the decimal
@@ -137,13 +120,82 @@ add_delay_pairs <- function(df, date_vars) {
 
 #* GEO LAYERS ------------------------------
 
-# the app draws on a web basemap, so layers need lon/lat; tol is in degrees
-prep_app_layer <- function(x, tol = GEO_SIMPLIFY_TOL) {
-  x <- sf::st_transform(x, 4326)
-  if (tol > 0) {
-    x <- sf::st_simplify(x, dTolerance = tol, preserveTopology = TRUE)
+# Simplify admin polygons with rmapshaper (as in the evd-2026-app): shared
+# borders are simplified once, so neighbouring units keep matching edges
+# (st_simplify works polygon by polygon, and on lon/lat data with s2 its
+# tolerance is in metres). `keep` = share of vertices kept; keep_shapes keeps
+# every unit, however small. keep >= 1 returns x unchanged.
+simplify_geo <- function(x, keep = 0.1) {
+  if (keep >= 1) {
+    return(x)
   }
-  x
+  rmapshaper::ms_simplify(x, keep = keep, keep_shapes = TRUE)
+}
+
+# the app draws on a web basemap, so layers need lon/lat
+prep_app_layer <- function(x, keep = GEO_SIMPLIFY_KEEP) {
+  x |>
+    sf::st_transform(4326) |>
+    simplify_geo(keep = keep)
+}
+
+# Restrict the full geobase to the admin units the linelist references:
+# provinces and health zones with cases, and every health area inside those
+# zones (the case dots and tooltips show which areas have cases).
+# Facilities (`hf`, optional): all those in the kept health zones, plus any
+# facility in `hf_pcodes` (e.g. visited facilities) located elsewhere.
+# With `save = TRUE` the subsets are written next to the full layers, in
+# <geobase_dir>/sf_sub/<country>_{adm1,adm2,adm3,hf}_sub.rds, in their original
+# CRS and unsimplified, so maps can reuse them; overwritten on each run.
+restrict_geobase <- function(
+  ll,
+  adm1,
+  adm2,
+  adm3,
+  hf = NULL,
+  hf_pcodes = NULL,
+  geobase_dir = geobase_version,
+  country = "COD",
+  save = TRUE
+) {
+  pcodes_used <- function(cols) {
+    cols <- intersect(cols, names(ll))
+    unique(na.omit(unlist(ll[cols], use.names = FALSE)))
+  }
+  adm1_used <- pcodes_used(paste0("adm1_pcode__", c("onset", "notif", "res")))
+  adm2_used <- pcodes_used(
+    paste0("adm2_pcode__", c("onset", "notif", "res", "comptabilisation"))
+  )
+
+  sub <- list(
+    adm1 = dplyr::filter(adm1, adm1_pcode %in% adm1_used),
+    adm2 = dplyr::filter(adm2, adm2_pcode %in% adm2_used),
+    adm3 = dplyr::filter(adm3, adm2_pcode %in% adm2_used)
+  )
+  if (!is.null(hf)) {
+    sub$hf <- hf |>
+      dplyr::filter(adm2_pcode %in% adm2_used | pcode %in% hf_pcodes) |>
+      # the geobase stores facilities as single-point MULTIPOINTs
+      sf::st_cast("POINT", warn = FALSE)
+  }
+
+  if (save) {
+    sub_dir <- fs::path(geobase_dir, "sf_sub")
+    fs::dir_create(sub_dir)
+    purrr::iwalk(
+      sub,
+      \(x, lvl) saveRDS(x, fs::path(sub_dir, glue::glue("{country}_{lvl}_sub.rds")))
+    )
+  }
+
+  cli::cli_inform(c(
+    "i" = "Geobase restricted to the linelist: {nrow(sub$adm1)} province(s), \\
+    {nrow(sub$adm2)} health zone(s), {nrow(sub$adm3)} health area(s)\\
+    {if (!is.null(sub$hf)) paste0(', ', nrow(sub$hf), ' facilities') else ''}.",
+    if (save) c(" " = "Saved to {.path {fs::path(geobase_dir, 'sf_sub')}}")
+  ))
+
+  sub
 }
 
 #* VACCINATED CASE MATCHING ------------------------------
