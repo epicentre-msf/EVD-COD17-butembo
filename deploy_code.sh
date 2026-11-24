@@ -3,12 +3,28 @@
 # pull it on the server. Stops without touching the server if anything is
 # uncommitted, untracked or not pushed.
 #
-# Usage: ./deploy_code.sh
+# Usage: ./deploy_code.sh [flags]
+#   --check-only         only check that everything is on GitHub, do not pull on episerv
 
 set -euo pipefail
 
 # run from the repo root whatever the current directory
 cd "$(dirname "$0")"
+
+check_only=false
+for arg in "$@"; do
+  case "$arg" in
+    -h | --help)
+      sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    --check-only) check_only=true ;;
+    *)
+      echo "Unknown flag: $arg (see ./deploy_code.sh --help)" >&2
+      exit 1
+      ;;
+  esac
+done
 
 echo "==> Checking that everything is on GitHub"
 
@@ -38,6 +54,11 @@ if [ "$behind" -gt 0 ]; then
 fi
 
 echo "OK: '$branch' is up to date on GitHub ($(git rev-parse --short HEAD))"
+
+if $check_only; then
+  echo "==> Done (--check-only, episerv not touched)"
+  exit 0
+fi
 
 echo "==> Pulling the code on episerv"
 ssh episerv "cd EVD-COD17-butembo && git pull"
