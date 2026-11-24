@@ -65,18 +65,18 @@ alert_kat_ll <- alert_kat_raw |>
     health_zone = "katwa",
     health_area = tolower(str_squish(health_area)),
     across(where(is.character), \(x) na_if(str_squish(x), "")),
-    alert_status = case_match(
+    alert_status = recode_values(
       alert_status,
       "Décès" ~ "dead",
       "Vivant" ~ "alive"
     ),
-    valid_status = case_match(
+    valid_status = recode_values(
       valid_status,
       "Invalidée" ~ "invalid",
       "Validée" ~ "valid",
-      .default = NA_character_
+      default = NA_character_
     ),
-    alert_source = case_match(
+    alert_source = recode_values(
       alert_source,
       "CT" ~ "fosa",
       "CTE" ~ "fosa",
@@ -84,7 +84,7 @@ alert_kat_ll <- alert_kat_raw |>
       "RA" ~ "ra",
       "SUIVI DES CONTACTS" ~ "contact_tracing",
       "SBC" ~ "comm",
-      .default = NA_character_
+      default = NA_character_
     )
   ) |>
   select(
@@ -184,19 +184,19 @@ alert_but_ll <- alert_but_raw |>
     health_zone = "butembo",
     health_area = tolower(str_squish(health_area)),
     across(where(is.character), \(x) na_if(str_squish(x), "")),
-    alert_status = case_match(
+    alert_status = recode_values(
       alert_status,
       "Décédé" ~ "dead",
       "Vivant" ~ "alive",
-      .default = NA_character_
+      default = NA_character_
     ),
-    valid_status = case_match(
+    valid_status = recode_values(
       valid_status,
       "Invalidée" ~ "invalid",
       "Validée" ~ "valid",
-      .default = NA_character_
+      default = NA_character_
     ),
-    alert_source = case_match(
+    alert_source = recode_values(
       alert_source,
       "Structure Sanitaire" ~ "fosa",
       "Morgue" ~ "fosa",
@@ -206,7 +206,7 @@ alert_but_ll <- alert_but_raw |>
       "Agent communautaire" ~ "comm",
       "Communauté/Famille" ~ "comm",
       "Communication/SBC" ~ "comm",
-      .default = NA_character_
+      default = NA_character_
     )
   ) |>
   select(

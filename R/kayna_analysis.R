@@ -528,7 +528,7 @@ lab_pos <- lab_kayna_clean |>
     lab_result == "Positif" & first_sample | lab_id == "FHV-KAY-26-0376"
   ) |>
   mutate(
-    sex = case_match(
+    sex = recode_values(
       toupper(str_sub(sex, 1, 1)),
       c("H", "M") ~ "Homme",
       "F" ~ "Femme"

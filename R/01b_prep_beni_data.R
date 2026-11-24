@@ -40,13 +40,13 @@ ll_beni_clean <- ll_beni_raw |>
     # comparison below reads one, so nothing downstream tests "Oui"
     across(
       where(is.character),
-      \(x) case_match(x, "Oui" ~ "Yes", "Non" ~ "No", .default = x)
+      \(x) recode_values(x, "Oui" ~ "Yes", "Non" ~ "No", default = x)
     ),
     # French in the raw export, English from here on
-    EVD_status = case_match(
+    EVD_status = recode_values(
       epi_class,
       "Confirmé" ~ "Confirmed",
-      .default = epi_class
+      default = epi_class
     ),
     type_of_exit = forcats::fct_recode(
       statut_final,
@@ -61,11 +61,11 @@ ll_beni_clean <- ll_beni_raw |>
       "Died"
     ),
     # Abandoned and an unfilled exit are unsettled, not survivors
-    outcome = case_match(
+    outcome = recode_values(
       as.character(type_of_exit),
       "Died" ~ "Died",
       "Recovered" ~ "Recovered",
-      .default = "Missing"
+      default = "Missing"
     ),
     outcome = factor(outcome, levels = c("Missing", "Recovered", "Died")),
     # onset -> notification (all cases), admission, death or cure (split by
@@ -92,7 +92,7 @@ ll_beni_clean <- ll_beni_raw |>
       infection_origin,
       levels = c("Unknown", "Imported", "Local")
     ),
-    sex = case_match(sexe, c("H", "M") ~ "Male", "F" ~ "Female"),
+    sex = recode_values(sexe, c("H", "M") ~ "Male", "F" ~ "Female"),
     sex = factor(sex, levels = c("Male", "Female")),
     hcw = if_else(
       is.na(profession),

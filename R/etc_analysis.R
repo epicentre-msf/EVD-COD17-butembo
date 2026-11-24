@@ -34,11 +34,11 @@ etc_conf <- etc_adm |>
   filter(EVD_status %in% c("Confirmed", "Not a case")) |>
   mutate(
     status = if_else(EVD_status == "Confirmed", "case", "non_case"),
-    age_yrs = case_match(
+    age_yrs = recode_values(
       age_unit,
       "Months" ~ age / 12,
       "Days" ~ age / 365.25,
-      .default = age
+      default = age
     ),
     age_group = cut(
       age_yrs,

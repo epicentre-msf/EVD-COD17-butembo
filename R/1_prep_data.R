@@ -6,8 +6,7 @@
 
 #* CONFIG ------------------------------------
 
-# Sets EXPORT_TO_SHAREPOINT, SEND_TO_SERVER, PREP_LAB_DATA, UPDATE_GEOBASE,
-# GEO_SIMPLIFY_KEEP
+# Sets EXPORT_TO_SHAREPOINT, SEND_TO_SERVER, PREP_LAB_DATA, UPDATE_GEOBASE
 source(here::here("R", "cli_args.R"))
 
 #* Load packages ---------------------------
@@ -23,27 +22,14 @@ fs::dir_create(fs::path_dir(app_data_path))
 # adm1/adm2/adm3 are read from the SharePoint geobase in 0_global.R
 
 # --update-geobase: a new geobase version also gets a new reference map
-if (UPDATE_GEOBASE && !isTRUE(geobase_update$updated)) {
-  cli::cli_alert_info(
-    "Geobase {fs::path_file(geobase_version)} already present: reference map not rebuilt"
-  )
-}
 if (UPDATE_GEOBASE && isTRUE(geobase_update$updated)) {
-  cli::cli_h2(
-    "Rebuilding the reference map for {fs::path_file(geobase_version)}"
-  )
-  ref_map_status <- system2(
+  system2(
     file.path(R.home("bin"), "Rscript"),
     args = c(
       shQuote(here::here("R", "reference-map.R")),
       if (!SEND_TO_SERVER) "--no-send"
     )
   )
-  if (ref_map_status != 0) {
-    cli::cli_alert_danger(
-      "Reference map failed (exit {ref_map_status}), see output above"
-    )
-  }
 }
 
 # drop geometry
@@ -73,13 +59,13 @@ ll_narr_clean <- ll_narr |>
     # comparison below reads one, so nothing downstream tests "Oui"
     across(
       where(is.character),
-      \(x) case_match(x, "Oui" ~ "Yes", "Non" ~ "No", .default = x)
+      \(x) recode_values(x, "Oui" ~ "Yes", "Non" ~ "No", default = x)
     ),
     # French in the raw export, English from here on
-    EVD_status = case_match(
+    EVD_status = recode_values(
       EVD_status,
       "Confirmé" ~ "Confirmed",
-      .default = EVD_status
+      default = EVD_status
     ),
     type_of_exit = forcats::fct_recode(
       type_of_exit,
@@ -94,11 +80,11 @@ ll_narr_clean <- ll_narr |>
       "Died"
     ),
     # Abandoned and an unfilled exit are unsettled, not survivors
-    outcome = case_match(
+    outcome = recode_values(
       as.character(type_of_exit),
       "Died" ~ "Died",
       "Recovered" ~ "Recovered",
-      .default = "Missing"
+      default = "Missing"
     ),
     outcome = factor(outcome, levels = c("Missing", "Recovered", "Died")),
     # onset -> notification (all cases), admission, death or cure (split by
@@ -125,7 +111,7 @@ ll_narr_clean <- ll_narr |>
       infection_butembo_1,
       levels = c("Unknown", "Imported", "Local")
     ),
-    sex = case_match(sex, c("H", "M") ~ "Male", "F" ~ "Female"),
+    sex = recode_values(sex, c("H", "M") ~ "Male", "F" ~ "Female"),
     sex = factor(sex, levels = c("Male", "Female")),
     # grepl(NA) reads FALSE, not NA, so an unfilled job would misread as not hcw
     hcw = if_else(is.na(job), NA, grepl("Personnel de sant", job)),
@@ -133,12 +119,12 @@ ll_narr_clean <- ll_narr |>
     age_raw = age, # the pair age_unit describes, kept for the share export
     age = age_years(age, age_unit),
     # after age_years(), which matches on the French tokens
-    age_unit = case_match(
+    age_unit = recode_values(
       age_unit,
       "Ans" ~ "Years",
       "Mois" ~ "Months",
       "Jour" ~ "Days",
-      .default = age_unit
+      default = age_unit
     ),
     age_group = cut(
       age,
@@ -299,11 +285,11 @@ ll_narr_clean <- ll_narr |>
     ),
     # labelled copy for grouping; mod_vb needs dead_upon_notif to stay logical
     dead_upon_notif_grp = factor(
-      case_match(
+      recode_values(
         dead_upon_notif,
         TRUE ~ "Dead on notification",
         FALSE ~ "Alive on notification",
-        .default = "Unknown"
+        default = "Unknown"
       ),
       levels = c("Dead on notification", "Alive on notification", "Unknown")
     ),
@@ -336,10 +322,10 @@ ll_narr_clean <- ll_narr |>
     ),
 
     transmission_type_1 = factor(
-      case_match(
+      recode_values(
         transmission_type_1,
         c(NA, "Inconnu") ~ "Inconnu",
-        .default = transmission_type_1
+        default = transmission_type_1
       ),
       levels = c(
         "Familiale",
@@ -691,7 +677,12 @@ if (PREP_LAB_DATA) {
       sample_type = replace_na(sample_type, "Unknown"),
       source = replace_na(source, "Unknown"),
       first_sample = factor(
-        case_match(first_sample, TRUE ~ "Oui", FALSE ~ "Non", NA ~ "Unknown"),
+        recode_values(
+          first_sample,
+          TRUE ~ "Oui",
+          FALSE ~ "Non",
+          NA ~ "Unknown"
+        ),
         levels = c("Oui", "Non", "Unknown")
       ),
       delay_sampling_result_days = as.numeric(date_lab_result - date_sampling),
@@ -793,7 +784,7 @@ if (SEND_TO_SERVER) {
   rsync_status <- system2(
     "rsync",
     args = c(
-      "-zavh",
+      "-zah",
       fs::path_expand(app_data_path),
       "episerv:/home/epicentre/EVD-COD17-butembo/R/butembo_dashboard/data/"
     )
@@ -824,7 +815,9 @@ lab_txt <- lab_data |>
   pull(txt) |>
   paste(collapse = ", ")
 
-cli::cli_h1("Data prep {CONFIG$export_prefix} \u00b7 {format(Sys.time(), '%d/%m/%Y %H:%M')}")
+cli::cli_h1(
+  "Data prep {CONFIG$export_prefix} \u00b7 {format(Sys.time(), '%d/%m/%Y %H:%M')}"
+)
 cli::cli_text(
   "Linelist source: {.file {fs::path_file(latest_narr_ll)}} ",
   "(modified {format(fs::file_info(latest_narr_ll)$modification_time, '%d/%m/%Y %H:%M')})"
@@ -833,24 +826,42 @@ cli::cli_text(
 cli::cli_h2("Steps")
 cli::cli_dl(c(
   "I. Linelist" = paste0(
-    fmt_n(nrow(ll_narr_clean)), " patients (", status_txt, "), ",
-    "last lab confirmation ", fmt_d(max(ll_narr_clean$date_lab_result_1, na.rm = TRUE))
+    fmt_n(nrow(ll_narr_clean)),
+    " patients (",
+    status_txt,
+    "), ",
+    "last lab confirmation ",
+    fmt_d(max(ll_narr_clean$date_lab_result_1, na.rm = TRUE))
   ),
   "II. Duplicates" = if (n_dupes > 0) {
-    paste0("{.strong ", n_dupes, " pid} in duplicate, see {.file ", fs::path_file(dupes_path), "}")
+    paste0(
+      "{.strong ",
+      n_dupes,
+      " pid} in duplicate, see {.file ",
+      fs::path_file(dupes_path),
+      "}"
+    )
   } else {
     "none"
   },
   "III. Transmission" = paste0(fmt_n(nrow(transmission_events)), " links"),
   "IV. HF visits" = paste0(
-    fmt_n(nrow(hf_visits)), " visits for ",
-    fmt_n(dplyr::n_distinct(hf_visits$unique_id)), " patients"
+    fmt_n(nrow(hf_visits)),
+    " visits for ",
+    fmt_n(dplyr::n_distinct(hf_visits$unique_id)),
+    " patients"
   ),
   "V. Lab" = paste0(fmt_n(nrow(lab_data)), " results: ", lab_txt),
-  "VI. Quality" = paste0(length(quality), " tables (", toString(names(quality)), ")"),
+  "VI. Quality" = paste0(
+    length(quality),
+    " tables (",
+    toString(names(quality)),
+    ")"
+  ),
   "VII. Geobase" = fs::path_file(geobase_version),
   "VIII. Alerts" = paste0(
-    fmt_n(nrow(alerts_clean)), " rows, latest alert ",
+    fmt_n(nrow(alerts_clean)),
+    " rows, latest alert ",
     fmt_d(max(alerts_clean$date, na.rm = TRUE))
   )
 ))

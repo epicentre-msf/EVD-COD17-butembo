@@ -348,10 +348,10 @@ cli::cli_alert_info("{nrow(events_one)} transmission pairs reconstructed")
 
 events_one |>
   mutate(
-    transmission_type = case_match(
+    transmission_type = recode_values(
       transmission_type,
       c(NA, "Inconnu") ~ "Unknown",
-      .default = transmission_type
+      default = transmission_type
     )
   ) |>
   count(transmission_type, sort = TRUE) |>

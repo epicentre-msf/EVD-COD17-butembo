@@ -75,19 +75,19 @@ ll_clean <- ll_clean |>
     # kitatumba id can sit in id_msf or id_msf_2
     has_msf_id = if_any(c(id_msf, id_msf_2), ~ !is.na(.x)),
     # prep recoded these to English; ETC exports are French
-    EVD_status = case_match(
+    EVD_status = recode_values(
       EVD_status,
       "Confirmed" ~ "Confirmé",
-      .default = EVD_status
+      default = EVD_status
     ),
-    sex = case_match(as.character(sex), "Male" ~ "M", "Female" ~ "F"),
+    sex = recode_values(as.character(sex), "Male" ~ "M", "Female" ~ "F"),
     age = age_raw,
-    age_unit = case_match(
+    age_unit = recode_values(
       age_unit,
       "Years" ~ "Ans",
       "Months" ~ "Mois",
       "Days" ~ "Jour",
-      .default = age_unit
+      default = age_unit
     ),
     vaccination_rvsv_yn = str_replace(vaccination_rvsv_yn, "Yes", "Oui")
   )

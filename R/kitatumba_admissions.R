@@ -64,7 +64,7 @@ kit_adm <- cte_kit_ll |>
   dplyr::mutate(
     adm_period = to_period(as.Date(date_admission_eff)),
     exit_period = to_period(as.Date(date_exit_eff)),
-    age_years = dplyr::case_match(
+    age_years = dplyr::recode_values(
       age_unit,
       "Ans" ~ as.numeric(age),
       "Mois" ~ as.numeric(age) / 12,

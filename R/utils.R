@@ -132,8 +132,9 @@ simplify_geo <- function(x, keep = 0.1) {
   rmapshaper::ms_simplify(x, keep = keep, keep_shapes = TRUE)
 }
 
-# the app draws on a web basemap, so layers need lon/lat
-prep_app_layer <- function(x, keep = GEO_SIMPLIFY_KEEP) {
+# the app draws on a web basemap, so layers need lon/lat; keep = share of
+# vertices kept, the app layers were slow at full detail
+prep_app_layer <- function(x, keep = 0.1) {
   x |>
     sf::st_transform(4326) |>
     simplify_geo(keep = keep)
@@ -187,13 +188,6 @@ restrict_geobase <- function(
       \(x, lvl) saveRDS(x, fs::path(sub_dir, glue::glue("{country}_{lvl}_sub.rds")))
     )
   }
-
-  cli::cli_inform(c(
-    "i" = "Geobase restricted to the linelist: {nrow(sub$adm1)} province(s), \\
-    {nrow(sub$adm2)} health zone(s), {nrow(sub$adm3)} health area(s)\\
-    {if (!is.null(sub$hf)) paste0(', ', nrow(sub$hf), ' facilities') else ''}.",
-    if (save) c(" " = "Saved to {.path {fs::path(geobase_dir, 'sf_sub')}}")
-  ))
 
   sub
 }
