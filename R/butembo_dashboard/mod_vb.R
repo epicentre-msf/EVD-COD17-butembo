@@ -11,6 +11,7 @@ mod_vb_ui <- function(id) {
       title = "Semaine épidémiologique",
       value = textOutput(ns("epiweek"), inline = TRUE),
       p(uiOutput(ns("epiweek_info"), inline = TRUE)),
+      p(class = "small text-muted mb-0", textOutput(ns("data_date"), inline = TRUE)),
       showcase_layout = "left center",
       class = "vb-accent vb-epiweek",
       height = "85px"
@@ -141,6 +142,15 @@ mod_vb_server <- function(id, df, time_filter, place_filter) {
         paste(as.integer(format(d, "%d")), mois[as.integer(format(d, "%m"))])
       }
       paste0(format(wk_start, "%G"), " · ", fmt(wk_start), " – ", fmt(wk_end))
+    })
+
+    # latest lab confirmation in the full linelist, also blind to the filters
+    output$data_date <- renderText({
+      last_conf <- suppressWarnings(max(but_ll$date_lab_result_1, na.rm = TRUE))
+      paste0(
+        "Donnée au : ",
+        if (is.finite(last_conf)) format(last_conf, "%d/%m/%Y") else "—"
+      )
     })
 
     output$confirmed <- renderText(scales::number(df_summary()$n_confirmed))
