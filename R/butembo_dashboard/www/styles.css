@@ -149,3 +149,8 @@
   font-size: 0.68rem;
   line-height: 1.2;
 }
+
+/* time_ui always renders the zoom-slider switch; no epicurve offers it */
+.shiny-input-container:has(> .form-switch > input[id$="add_zoom_control"]) {
+  display: none !important;
+}

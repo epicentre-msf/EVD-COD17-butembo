@@ -94,18 +94,13 @@ server <- function(input, output, session) {
     filter_info = filter_data$filter_info
   )
 
-  bar_click <- time_server(
+  bar_click <- curve_server(
     id = "curve",
     df = df_period,
     date_vars = date_vars,
     group_vars = group_vars,
     group_pal = evd_pal,
     na_colour = na_col,
-    show_ratio = TRUE,
-    ratio_var = "type_of_exit",
-    ratio_lab = "Létalité",
-    ratio_numer = "Died",
-    ratio_denom = c("Died", "Recovered", "Abandoned"),
     place_filter = map_click,
     filter_info = filter_data$filter_info
   )

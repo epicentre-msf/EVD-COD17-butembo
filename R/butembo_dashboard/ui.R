@@ -130,7 +130,7 @@ ui <- function(req) page_navbar(
         min_height = 380,
         mod_zs_table_ui("zs_table"),
         do.call(
-          time_ui,
+          curve_ui,
           c(
             list(
               id = "curve",
@@ -139,7 +139,7 @@ ui <- function(req) page_navbar(
               group_vars = group_vars,
               date_interval_default = "week",
               group_var_default = "dead_upon_notif_grp",
-              ratio_line_lab = "Afficher la courbe de létalité ?"
+              ratio_line_lab = "Afficher une courbe de proportion ?"
             ),
             time_ui_labs
           )

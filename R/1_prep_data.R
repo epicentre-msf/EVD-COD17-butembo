@@ -111,6 +111,16 @@ ll_narr_clean <- ll_narr |>
       infection_butembo_1,
       levels = c("Unknown", "Imported", "Local")
     ),
+    # urban = the three city health zones; source casing is mixed (katwa,
+    # MANDIMA) and "0" marks an unfilled zone, which stays NA
+    urban_area = case_when(
+      is.na(adm2_comptabilisation_lab) |
+        adm2_comptabilisation_lab == "0" ~ NA_character_,
+      str_to_sentence(adm2_comptabilisation_lab) %in%
+        c("Beni", "Butembo", "Katwa") ~ "Yes",
+      .default = "No"
+    ),
+    urban_area = factor(urban_area, levels = c("Yes", "No")),
     sex = recode_values(sex, c("H", "M") ~ "Male", "F" ~ "Female"),
     sex = factor(sex, levels = c("Male", "Female")),
     # grepl(NA) reads FALSE, not NA, so an unfilled job would misread as not hcw
@@ -131,6 +141,19 @@ ll_narr_clean <- ll_narr |>
       breaks = CONFIG$age_breaks,
       right = FALSE,
       labels = CONFIG$age_labs
+    ),
+    # paediatric groups need months: `age` is floored years, so a newborn and
+    # an 11-month-old both read 0. Rebuilt from age_raw and the English unit
+    ped_group = cut(
+      as.numeric(str_replace(as.character(age_raw), fixed(","), ".")) *
+        case_when(
+          age_unit == "Months" ~ 1,
+          age_unit == "Days" ~ 12 / 365.25,
+          .default = 12
+        ),
+      breaks = c(0, 1, 12, 60, 120, Inf),
+      right = FALSE,
+      labels = c("<1m", "1m-<1", "1-4", "5-9", "10+")
     ),
     # split "site | aire de santé | zone de santé" into 3 columns
     adm3_isolation = str_squish(str_split_i(isolation_site_id, fixed("|"), 2)),

@@ -35,8 +35,13 @@ window.epiWeekHeader = function (x) {
             : "<b>" + Highcharts.dateFormat("%e %b %Y", this.x) + "</b><br/>";
           var total = 0;
           var rows = this.points.map(function (p) {
+            // the proportion line is a %, not a count: own row, out of the total
+            if (p.series.options.id === "ratio_line") {
+              return '<span style="color:' + p.color + '">━</span> ' + p.series.name +
+                ": <b>" + Highcharts.numberFormat(p.y, 1) + "%</b><br/>";
+            }
             total += p.y;
-            var pct = p.percentage !== undefined && this.points.length > 1
+            var pct = p.percentage !== undefined && p.series.type === "column" && this.points.length > 1
               ? " (" + Highcharts.numberFormat(p.percentage, 1) + "%)"
               : "";
             return '<span style="color:' + p.color + '">●</span> ' + p.series.name +

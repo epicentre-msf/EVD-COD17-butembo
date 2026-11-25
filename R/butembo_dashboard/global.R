@@ -310,7 +310,9 @@ date_vars <- c(
 group_vars <- c(
   "Zone de santé (Labo)" = "adm2_comptabilisation_lab",
   "Zone de santé (Harmonisé)" = "adm2_comptabilisation",
+  "Zone urbaine" = "urban_area",
   "Groupe d'âge" = "age_group",
+  "Groupe d'âge pédiatrique" = "ped_group",
   "Sexe" = "sex",
   "Isolé" = "isolated",
   "Décès hors isolement" = "dead_out_isolation",
@@ -374,6 +376,9 @@ time_ui_labs <- list(
 )
 
 # ! Modules ----------------------------
+
+# main epicurve: epishiny time module with a user-picked proportion line
+source("mod_curve.R")
 
 # value boxes module
 source("mod_vb.R")
@@ -496,7 +501,17 @@ group_pals <- list(
     "50-59" = "#00331f",
     "60+" = "#002115"
   ),
+  # children on a dark-to-light gradient (youngest darkest); 10+ pale so the
+  # paediatric bands stand out, kept off na_col so it never reads as missing
+  ped_group = c(
+    "<1m" = "#00441b",
+    "1m-<1" = "#238b45",
+    "1-4" = "#66bd63",
+    "5-9" = "#a6d96a",
+    "10+" = "#e8e3d3"
+  ),
   isolated = c("Yes" = "#2a6f97", "No" = "#9e2a2b"),
+  urban_area = c("Yes" = "#1b6ca8", "No" = "#8fbf6a"),
   narrative_status = c(
     "Narratifs entrés" = "#3a9d8f",
     "Narratifs disponibles (non entrés)" = "#e09f3e",
