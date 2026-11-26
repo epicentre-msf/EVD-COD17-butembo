@@ -111,13 +111,15 @@ ll_narr_clean <- ll_narr |>
       infection_butembo_1,
       levels = c("Unknown", "Imported", "Local")
     ),
-    # urban = the three city health zones; source casing is mixed (katwa,
-    # MANDIMA) and "0" marks an unfilled zone, which stays NA
+    # source casing is mixed (katwa, MANDIMA) and "0" marks an unfilled zone
+    adm2_comptabilisation_lab = na_if(
+      str_to_sentence(adm2_comptabilisation_lab),
+      "0"
+    ),
+    # urban = the three city health zones
     urban_area = case_when(
-      is.na(adm2_comptabilisation_lab) |
-        adm2_comptabilisation_lab == "0" ~ NA_character_,
-      str_to_sentence(adm2_comptabilisation_lab) %in%
-        c("Beni", "Butembo", "Katwa") ~ "Yes",
+      is.na(adm2_comptabilisation_lab) ~ NA_character_,
+      adm2_comptabilisation_lab %in% c("Beni", "Butembo", "Katwa") ~ "Yes",
       .default = "No"
     ),
     urban_area = factor(urban_area, levels = c("Yes", "No")),
