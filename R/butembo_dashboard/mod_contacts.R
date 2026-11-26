@@ -122,6 +122,8 @@ mod_contacts_server <- function(
         ll,
         by = setNames(id_var, to_var)
       )
+      # make_epicontacts errors on an empty contacts table
+      req(nrow(ct) > 0)
       epicontacts::make_epicontacts(
         linelist = ll,
         contacts = ct,

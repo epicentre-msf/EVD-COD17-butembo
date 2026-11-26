@@ -194,10 +194,13 @@ server <- function(input, output, session) {
     adm3 = app_data$admin_data$adm3
   )
 
-  # make_epicontacts needs unique node ids and both ends of every edge present
+  # make_epicontacts needs unique node ids and both ends of every edge present.
+  # Chains ignore the global period / ISO week filter (sidebar filters still
+  # apply): a short window cuts most links and can leave no edges at all.
   chain_ll <- shiny::reactive({
-    d <- dplyr::distinct(df_period(), unique_id, .keep_all = TRUE)
-    message("chains: ", nrow(d), " nodes of ", nrow(df_period()), " rows")
+    ll <- filter_data$df()
+    d <- dplyr::distinct(ll, unique_id, .keep_all = TRUE)
+    message("chains: ", nrow(d), " nodes of ", nrow(ll), " rows")
     d
   })
 
