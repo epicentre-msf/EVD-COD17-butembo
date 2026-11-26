@@ -1,0 +1,65 @@
+BUTEMBO DASHBOARD: UPDATE DATA AND DEPLOY CODE
+==============================================
+
+Run from anywhere. The scripts cd to the repo root themselves.
+Shell aliases (in ~/.zshrc):
+  butembo-update-data   = ./update_data.sh
+  butembo-deploy-code   = ./deploy_code.sh
+Add --help to either one to see its flags.
+
+
+1. UPDATE THE DATA
+------------------
+  butembo-update-data [flags]
+
+  Runs R/1_prep_data.R, which builds the linelist, facilities and dashboard
+  bundle, then rsyncs app_data.rds to episerv:
+    /home/epicentre/EVD-COD17-butembo/R/butembo_dashboard/data/
+
+  Flags:
+    --update-alerts    rerun R/02_prep_alerts.R first (default: reuse the latest alerts export)
+    --update-geobase   copy the latest OutbreakTools geobase before loading it
+    --update-lab       rebuild the lab data (default: reuse it from the last app_data.rds)
+    --no-export        do not write exports to SharePoint
+    --no-send          do not rsync app_data.rds to episerv
+
+  Typical run:   butembo-update-data --update-alerts --update-lab
+
+
+2. DEPLOY CODE CHANGES
+----------------------
+  a. commit and push:   git add ... && git commit -m "..." && git push
+  b. butembo-deploy-code
+
+  deploy_code.sh first checks that everything is on GitHub. It stops without
+  touching the server if anything is uncommitted, untracked or not pushed.
+  Then it runs "git pull" on episerv.
+    --check-only   only run the GitHub check, do not pull on episerv
+
+
+3. REFERENCE MAP (only when the geobase or the map changes)
+-----------------------------------------------------------
+  Rscript R/reference-map.R [--no-send]
+
+  Builds the map on SharePoint (spatiale/reference_map/), copies it to
+  R/butembo_dashboard/www/reference_map.html and rsyncs it to episerv.
+  The file is also tracked in git, so commit and push it afterwards.
+  Otherwise deploy_code.sh will refuse to run because of the uncommitted change.
+
+
+4. MAKE THE CHANGES VISIBLE (IMPORTANT)
+---------------------------------------
+  The app runs on ShinyProxy, with one Docker container per user session.
+  global.R runs only once, when the container starts. It loads app_data.rds
+  and all the mod_*.R files.
+  -> A container that is already running keeps the OLD data and the OLD module
+     code, even after an update or a deploy.
+  -> To see the changes, stop the app in ShinyProxy (or log out and back in).
+     This starts a new container.
+  Only ui.R and server.R are re-read in a running container when they change.
+
+QUICK CHECKS ON EPISERV
+-----------------------
+  ssh episerv "cd EVD-COD17-butembo && git log --oneline -1"           # deployed commit
+  ssh episerv "ls -la EVD-COD17-butembo/R/butembo_dashboard/data"      # data timestamp
+  ssh episerv 'docker ps --format "{{.Names}} {{.Status}}" | grep butembo'   # running containers and their age
